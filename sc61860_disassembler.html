@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC61860 Disassembler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #0a0c10;
+    --panel:     #0f1319;
+    --border:    #1e2d3d;
+    --accent:    #00e5ff;
+    --accent2:   #ff6b35;
+    --green:     #39ff14;
+    --dim:       #3a4a5a;
+    --text:      #c8d8e8;
+    --muted:     #5a7a8a;
+    --addr:      #ff6b35;
+    --hex:       #00e5ff;
+    --mnem:      #39ff14;
+    --operand:   #e8d87a;
+    --label:     #c792ea;
+    --labeldef:  #c792ea;
+    --comment:   #5a7a8a;
+    --error:     #ff4444;
+    --glow:      0 0 8px rgba(0,229,255,0.4);
+    --glow2:     0 0 8px rgba(57,255,20,0.3);
+    --glow3:     0 0 8px rgba(199,146,234,0.4);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    background: linear-gradient(180deg, rgba(0,229,255,0.04) 0%, transparent 100%);
+    position: relative;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.5;
+  }
+
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900;
+    font-size: 22px;
+    color: var(--accent);
+    text-shadow: var(--glow);
+    letter-spacing: 2px;
+    white-space: nowrap;
+  }
+  .logo span { color: var(--accent2); text-shadow: 0 0 8px rgba(255,107,53,0.5); }
+  .tagline { color: var(--muted); font-size: 12px; letter-spacing: 1px; }
+
+  .badge {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+    line-height: 1.6;
+  }
+  .badge em { color: var(--accent); font-style: normal; }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 0;
+    min-height: 0;
+  }
+
+  .controls {
+    grid-column: 1 / -1;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 32px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  label {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 2px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  input[type="text"]:focus { border-color: var(--accent); box-shadow: var(--glow); }
+  #org-addr { width: 80px; }
+
+  /* ── Segmented toggle ── */
+  .toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .toggle-label {
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .toggle-wrap {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    cursor: pointer;
+    user-select: none;
+    height: 30px;
+  }
+  .toggle-opt {
+    padding: 0 13px;
+    display: flex;
+    align-items: center;
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--muted);
+    transition: color 0.18s;
+    position: relative;
+    z-index: 1;
+    white-space: nowrap;
+  }
+  .toggle-slider {
+    position: absolute;
+    top: 2px; bottom: 2px;
+    border-radius: 1px;
+    transition: left 0.16s cubic-bezier(.4,0,.2,1), width 0.16s cubic-bezier(.4,0,.2,1);
+    z-index: 0;
+  }
+  /* Endian = cyan */
+  .toggle-wrap.endian .toggle-slider {
+    background: rgba(0,229,255,0.12);
+    border: 1px solid rgba(0,229,255,0.6);
+  }
+  .toggle-wrap.endian .toggle-opt.active { color: var(--accent); text-shadow: var(--glow); }
+  /* Labels = purple */
+  .toggle-wrap.labels .toggle-slider {
+    background: rgba(199,146,234,0.12);
+    border: 1px solid rgba(199,146,234,0.6);
+  }
+  .toggle-wrap.labels .toggle-opt.active { color: var(--label); text-shadow: var(--glow3); }
+
+  .btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 7px 16px;
+    border: 1px solid currentColor;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    white-space: nowrap;
+    height: 30px;
+    display: flex;
+    align-items: center;
+  }
+  .btn-primary  { color: var(--accent); border-color: var(--accent); }
+  .btn-primary:hover { background: rgba(0,229,255,0.1); box-shadow: var(--glow); }
+  .btn-secondary { color: var(--muted); border-color: var(--dim); }
+  .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+  .btn-danger { color: var(--error); border-color: var(--error); }
+  .btn-danger:hover { background: rgba(255,68,68,0.1); }
+
+  .separator { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; }
+
+  .stat-pill { font-size: 11px; color: var(--muted); margin-left: auto; }
+  .stat-pill em { color: var(--green); font-style: normal; font-weight: bold; }
+
+  /* Panels */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    min-height: 0;
+    overflow: hidden;
+  }
+  .panel:last-child { border-right: none; }
+
+  .panel-header {
+    padding: 10px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .panel-header .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: var(--glow);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  #hex-input {
+    flex: 1;
+    background: var(--bg);
+    border: none;
+    color: var(--accent);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    line-height: 1.7;
+    padding: 20px;
+    resize: none;
+    outline: none;
+    letter-spacing: 0.5px;
+  }
+  #hex-input::placeholder { color: var(--dim); }
+
+  .output-panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+
+  #output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 0;
+    background: var(--bg);
+    scroll-behavior: smooth;
+  }
+  #output::-webkit-scrollbar { width: 6px; }
+  #output::-webkit-scrollbar-track { background: var(--bg); }
+  #output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Label definition row */
+  .label-def {
+    padding: 8px 20px 0 20px;
+    font-size: 12px;
+    color: var(--labeldef);
+    text-shadow: var(--glow3);
+    letter-spacing: 0.5px;
+    margin-top: 6px;
+    border-left: 2px solid var(--label);
+    margin-left: 0;
+  }
+  .label-def:first-child { margin-top: 0; }
+
+  .asm-line {
+    display: grid;
+    grid-template-columns: 76px 86px 100px 1fr;
+    padding: 2px 20px;
+    font-size: 13px;
+    line-height: 1.75;
+    transition: background 0.1s;
+    border-left: 2px solid transparent;
+  }
+  .asm-line:hover { background: rgba(255,255,255,0.03); border-left-color: var(--accent); }
+  .asm-line.error-line { border-left-color: var(--error); background: rgba(255,68,68,0.05); }
+  .asm-line.jump-target { border-left-color: var(--label); }
+
+  .col-addr    { color: var(--addr); }
+  .col-hex     { color: var(--hex); letter-spacing: 0.5px; }
+  .col-mnem    { color: var(--mnem); font-weight: bold; }
+  .col-operand { color: var(--operand); }
+  .col-label   { color: var(--label); text-shadow: var(--glow3); }
+  .col-comment { color: var(--comment); font-size: 11px; }
+
+  .error-msg { color: var(--error); padding: 20px; font-size: 13px; }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--dim);
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+    gap: 12px;
+    text-align: center;
+    padding: 40px;
+  }
+  .empty-state .cpu-art {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--border);
+    white-space: pre;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 8px 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    background: var(--panel);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    flex-wrap: wrap;
+  }
+  footer span em { color: var(--text); font-style: normal; }
+  .status-ok   { color: var(--green); }
+  .status-err  { color: var(--error); }
+  .status-wait { color: var(--muted); }
+
+  @media (max-width: 820px) {
+    main { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
+    .panel { border-right: none; border-bottom: 1px solid var(--border); height: 220px; }
+    .output-panel { height: auto; border-bottom: none; }
+    .asm-line { grid-template-columns: 66px 74px 96px 1fr; font-size: 12px; padding: 2px 10px; }
+    header { padding: 14px 16px; }
+    .controls { padding: 10px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">SC<span>61860</span> DASM</div>
+    <div class="tagline">SHARP ESR-H CPU DISASSEMBLER &bull; PC-12xx / 13xx / 14xx</div>
+  </div>
+  <div class="badge">CPU: <em>HITACHI SC61860</em><br>ARCH: <em>ESR-H / 8-bit</em></div>
+</header>
+
+<main>
+  <div class="controls">
+
+    <label>ORG</label>
+    <input type="text" id="org-addr" value="8000" maxlength="4" spellcheck="false">
+
+    <div class="separator"></div>
+
+    <!-- Endian toggle -->
+    <div class="toggle-group">
+      <span class="toggle-label">ENDIAN</span>
+      <div class="toggle-wrap endian" id="endian-toggle" onclick="toggleEndian()">
+        <div class="toggle-slider" id="endian-slider"></div>
+        <div class="toggle-opt active" id="endian-be">BIG</div>
+        <div class="toggle-opt"        id="endian-le">LITTLE</div>
+      </div>
+    </div>
+
+    <!-- Targets toggle -->
+    <div class="toggle-group">
+      <span class="toggle-label">TARGETS</span>
+      <div class="toggle-wrap labels" id="label-toggle" onclick="toggleLabels()">
+        <div class="toggle-slider" id="label-slider"></div>
+        <div class="toggle-opt active" id="label-lbl">LABELS</div>
+        <div class="toggle-opt"        id="label-addr">ADDRESSES</div>
+      </div>
+    </div>
+
+    <div class="separator"></div>
+
+    <button class="btn btn-primary"   onclick="disassemble()">&#9654;&nbsp;DISASSEMBLE</button>
+    <button class="btn btn-secondary" onclick="loadSample()">SAMPLE</button>
+    <button class="btn btn-danger"    onclick="clearAll()">CLEAR</button>
+    <div class="separator"></div>
+    <button class="btn btn-secondary" id="copy-btn" onclick="copyOutput()">COPY</button>
+
+    <div class="stat-pill" id="stats">READY</div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <div class="dot"></div>
+      HEX INPUT — SPACE / COMMA / NEWLINE SEPARATED
+    </div>
+    <textarea id="hex-input"
+      placeholder="Enter hex bytes, e.g.:&#10;02 0A 34 00 05 59 42 2F 01 37&#10;78 80 10 79 80 10&#10;&#10;Ctrl+Enter to disassemble"></textarea>
+  </div>
+
+  <div class="panel output-panel">
+    <div class="panel-header">
+      <div class="dot" style="background:var(--green);box-shadow:var(--glow2)"></div>
+      DISASSEMBLY OUTPUT
+    </div>
+    <div id="output">
+      <div class="empty-state">
+        <div class="cpu-art">╔══════════════════╗
+║  SC61860 / ESR-H ║
+║   8-BIT CPU      ║
+║   64KB ADDR SPACE║
+╚══════════════════╝</div>
+        ENTER HEX BYTES AND PRESS DISASSEMBLE
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span id="status" class="status-wait">&#9632; IDLE</span>
+  <span>INSTRUCTIONS: <em id="stat-instr">—</em></span>
+  <span>BYTES: <em id="stat-bytes">—</em></span>
+  <span>ADDR RANGE: <em id="stat-range">—</em></span>
+  <span style="margin-left:auto;color:var(--border)">UTZ82/SC61860-INSTRUCTION-SET</span>
+</footer>
+
+<script>
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let useBigEndian = true;  // SC61860 native = big-endian
+let useLabels    = true;  // generate L_xxxx symbols for targets
+
+// ─────────────────────────────────────────────
+// TOGGLE MECHANICS
+// ─────────────────────────────────────────────
+function slideToOpt(sliderId, optEl) {
+  const slider = document.getElementById(sliderId);
+  slider.style.left  = optEl.offsetLeft  + 'px';
+  slider.style.width = optEl.offsetWidth + 'px';
+}
+
+function initToggles() {
+  slideToOpt('endian-slider', document.getElementById('endian-be'));
+  slideToOpt('label-slider',  document.getElementById('label-lbl'));
+}
+window.addEventListener('load',   initToggles);
+window.addEventListener('resize', initToggles);
+
+function toggleEndian() {
+  useBigEndian = !useBigEndian;
+  const beEl = document.getElementById('endian-be');
+  const leEl = document.getElementById('endian-le');
+  beEl.classList.toggle('active', useBigEndian);
+  leEl.classList.toggle('active', !useBigEndian);
+  slideToOpt('endian-slider', useBigEndian ? beEl : leEl);
+}
+
+function toggleLabels() {
+  useLabels = !useLabels;
+  const lblEl  = document.getElementById('label-lbl');
+  const addrEl = document.getElementById('label-addr');
+  lblEl.classList.toggle('active', useLabels);
+  addrEl.classList.toggle('active', !useLabels);
+  slideToOpt('label-slider', useLabels ? lblEl : addrEl);
+}
+
+// ─────────────────────────────────────────────
+// INSTRUCTION TABLE
+// [mnemonic, extraOperandBytes, fmt, effectComment]
+//
+// fmt key:
+//   'none'  – no operand
+//   'lp'    – LP n: n encoded in opcode bits 5:0
+//   'n8'    – 1-byte immediate
+//   'n16'   – 2-byte address (big or little endian per toggle)
+//   'rel+'  – relative forward: PC+2+n
+//   'rel-'  – relative backward: PC+2-n
+//   'cal'   – CAL: hi from opcode bits 4:0, lo from operand byte
+//   'ptc'   – PTC (followed by .db/.dw data)
+//   'dtc'   – DTC (followed by .db/.dw data)
+// ─────────────────────────────────────────────
+const OPCODES = {
+  0x00:['LII',  1,'n8',  'n→I'],
+  0x01:['LIJ',  1,'n8',  'n→J'],
+  0x02:['LIA',  1,'n8',  'n→A'],
+  0x03:['LIB',  1,'n8',  'n→B'],
+  0x04:['IX',   0,'none','X+1→X, X→DP'],
+  0x05:['DX',   0,'none','X-1→X, X→DP'],
+  0x06:['IY',   0,'none','Y+1→Y, Y→DP'],
+  0x07:['DY',   0,'none','Y-1→Y, Y→DP'],
+  0x08:['MVW',  0,'none','(Q)→(P) [I+1 bytes]'],
+  0x09:['EXW',  0,'none','(P)↔(Q) [I+1 bytes]'],
+  0x0A:['MVB',  0,'none','(Q)→(P) [J+1 bytes]'],
+  0x0B:['EXB',  0,'none','(P)↔(Q) [J+1 bytes]'],
+  0x0C:['ADN',  0,'none','BCD add [I+1 digits]'],
+  0x0D:['SBN',  0,'none','BCD sub [I+1 digits]'],
+  0x0E:['ADW',  0,'none','BCD add wide'],
+  0x0F:['SBW',  0,'none','BCD sub wide'],
+
+  0x10:['LIDP', 2,'n16', 'nm→DP'],
+  0x11:['LIDL', 1,'n8',  'm→DPl'],
+  0x12:['LIP',  1,'n8',  'n→P'],
+  0x13:['LIQ',  1,'n8',  'n→Q'],
+  0x14:['ADB',  0,'none','(P)+A→(P), (P+1)+B+c→(P+1)'],
+  0x15:['SBB',  0,'none','(P)-A→(P), (P+1)-B-c→(P+1)'],
+  0x16:['???',  0,'none','unknown'],
+  0x17:['???',  0,'none','unknown'],
+  0x18:['MVWD', 0,'none','(DP)→(P) [I+1 bytes]'],
+  0x19:['EXWD', 0,'none','(P)↔(DP) [I+1 bytes]'],
+  0x1A:['MVBD', 0,'none','(DP)→(P) [J+1 bytes]'],
+  0x1B:['EXBD', 0,'none','(P)↔(DP) [J+1 bytes]'],
+  0x1C:['SRW',  0,'none','(P)>>4 nibble shift'],
+  0x1D:['SLW',  0,'none','(P)<<4 nibble shift'],
+  0x1E:['FILM', 0,'none','A→(P)..(P+I), fill mem'],
+  0x1F:['FILD', 0,'none','A→(DP)..(DP+I), fill'],
+
+  0x20:['LDP',  0,'none','P→A'],
+  0x21:['LDQ',  0,'none','Q→A'],
+  0x22:['LDR',  0,'none','R→A'],
+  0x23:['CLRA', 0,'none','0→A, 0→H'],
+  0x24:['IXL',  0,'none','X+1→X, (X)→A'],
+  0x25:['DXL',  0,'none','X-1→X, (X)→A'],
+  0x26:['IYS',  0,'none','Y+1→Y, A→(Y)'],
+  0x27:['DYS',  0,'none','Y-1→Y, A→(Y)'],
+  0x28:['JRNZP',1,'rel+','IF z=0 branch forward'],
+  0x29:['JRNZM',1,'rel-','IF z=0 branch back'],
+  0x2A:['JRNCP',1,'rel+','IF c=0 branch forward'],
+  0x2B:['JRNCM',1,'rel-','IF c=0 branch back'],
+  0x2C:['JRP',  1,'rel+','branch forward'],
+  0x2D:['JRM',  1,'rel-','branch back'],
+  0x2E:['???',  0,'none','unknown'],
+  0x2F:['LOOP', 1,'rel-','(R)-1→(R), IF (R)≠0 branch'],
+
+  0x30:['STP',  0,'none','A→P'],
+  0x31:['STQ',  0,'none','A→Q'],
+  0x32:['STR',  0,'none','A→R'],
+  0x33:['STH',  0,'none','A→H  [undoc]'],
+  0x34:['PUSH', 0,'none','A→(R), R-1→R'],
+  0x35:['DATA', 0,'none','(BA)→(P) [I+1 bytes]'],
+  0x36:['???',  0,'none','unknown'],
+  0x37:['RTN',  0,'none','(R+1,R+2)→PC, R+2→R'],
+  0x38:['JRZP', 1,'rel+','IF z=1 branch forward'],
+  0x39:['JRZM', 1,'rel-','IF z=1 branch back'],
+  0x3A:['JRCP', 1,'rel+','IF c=1 branch forward'],
+  0x3B:['JRCM', 1,'rel-','IF c=1 branch back'],
+  0x3C:['???',  0,'none','unknown'],
+  0x3D:['???',  0,'none','unknown'],
+  0x3E:['???',  0,'none','unknown'],
+  0x3F:['???',  0,'none','unknown'],
+
+  0x40:['INCI', 0,'none','I+1→I'],
+  0x41:['DECI', 0,'none','I-1→I'],
+  0x42:['INCA', 0,'none','A+1→A'],
+  0x43:['DECA', 0,'none','A-1→A'],
+  0x44:['ADM',  0,'none','(P)+A→(P)'],
+  0x45:['SBM',  0,'none','(P)-A→(P)'],
+  0x46:['ANMA', 0,'none','(P)&A→(P)'],
+  0x47:['ORMA', 0,'none','(P)|A→(P)'],
+  0x48:['INCK', 0,'none','K+1→K'],
+  0x49:['DECK', 0,'none','K-1→K'],
+  0x4A:['INCM', 0,'none','M+1→M'],
+  0x4B:['DECM', 0,'none','M-1→M'],
+  0x4C:['INA',  0,'none','IA-Port→A'],
+  0x4D:['NOPW', 0,'none','no operation (2cy)'],
+  0x4E:['WAIT', 1,'n8',  'wait n+6 cycles'],
+  0x4F:['CUP',  0,'none','wait Xin=1 [I iters]'],
+
+  0x50:['INCP', 0,'none','P+1→P'],
+  0x51:['DECP', 0,'none','P-1→P'],
+  0x52:['STD',  0,'none','A→(DP)'],
+  0x53:['MVDM', 0,'none','(P)→(DP)'],
+  0x54:['MVMP', 0,'none','(PC+1)→(P)'],
+  0x55:['MVMD', 0,'none','(DP)→(P)'],
+  0x56:['LDPC', 0,'none','(PC+1)→A  [undoc]'],
+  0x57:['LDD',  0,'none','(DP)→A'],
+  0x58:['SWP',  0,'none','swap A nibbles'],
+  0x59:['LDM',  0,'none','(P)→A'],
+  0x5A:['SL',   0,'none','shift A left, c'],
+  0x5B:['POP',  0,'none','(R)→A, R+1→R'],
+  0x5C:['???',  0,'none','unknown'],
+  0x5D:['OUTA', 0,'none','(5C)→IA-Port'],
+  0x5E:['???',  0,'none','unknown'],
+  0x5F:['OUTF', 0,'none','(5E)→F0-Port'],
+
+  0x60:['ANIM', 1,'n8',  '(P)&n→(P)'],
+  0x61:['ORIM', 1,'n8',  '(P)|n→(P)'],
+  0x62:['TSIM', 1,'n8',  '(P)&n  [test]'],
+  0x63:['CPIM', 1,'n8',  '(P)-n  [compare]'],
+  0x64:['ANIA', 1,'n8',  'A&n→A'],
+  0x65:['ORIA', 1,'n8',  'A|n→A'],
+  0x66:['TSIA', 1,'n8',  'A&n  [test]'],
+  0x67:['CPIA', 1,'n8',  'A-n  [compare]'],
+  0x68:['???',  0,'none','unknown'],
+  0x69:['DTC',  0,'dtc', 'do table call'],
+  0x6A:['NOPT', 0,'none','no operation (alt)'],
+  0x6B:['TEST', 1,'n8',  'test-byte & n'],
+  0x6C:['???',  0,'none','unknown'],
+  0x6D:['???',  0,'none','unknown'],
+  0x6E:['???',  0,'none','unknown'],
+  0x6F:['CDN',  0,'none','wait Xin=0 [I iters]'],
+
+  0x70:['ADIM', 1,'n8',  '(P)+n→(P)'],
+  0x71:['SBIM', 1,'n8',  '(P)-n→(P)'],
+  0x72:['LIIH', 1,'n8',  'H→I, n→H  [undoc]'],
+  0x73:['LIIH', 1,'n8',  'H→I, n→H  [undoc alt]'],
+  0x74:['ADIA', 1,'n8',  'A+n→A'],
+  0x75:['SBIA', 1,'n8',  'A-n→A'],
+  0x76:['LIIH', 1,'n8',  'H→I, n→H  [undoc alt]'],
+  0x77:['LIIH', 1,'n8',  'H→I, n→H  [undoc alt]'],
+  0x78:['CALL', 2,'n16', 'call subroutine'],
+  0x79:['JP',   2,'n16', 'jump absolute'],
+  0x7A:['PTC',  0,'ptc', 'prepare table call'],
+  0x7B:['HALT', 0,'none','halt CPU  [undoc]'],
+  0x7C:['JPNZ', 2,'n16', 'IF z=0 jump'],
+  0x7D:['JPNC', 2,'n16', 'IF c=0 jump'],
+  0x7E:['JPZ',  2,'n16', 'IF z=1 jump'],
+  0x7F:['JPC',  2,'n16', 'IF c=1 jump'],
+};
+
+// LP  $80–$BF : LP n  (n = opcode & 0x3F, range 0..63)
+for (let n = 0; n <= 0x3F; n++) OPCODES[0x80 + n] = ['LP', 0, 'lp', `${h2(n)}→P`];
+
+// Override C0–DF (they sit inside the LP range above)
+Object.assign(OPCODES, {
+  0xC0:['INCJ', 0,'none','J+1→J'],  0xC1:['DECJ', 0,'none','J-1→J'],
+  0xC2:['INCB', 0,'none','B+1→B'],  0xC3:['DECB', 0,'none','B-1→B'],
+  0xC4:['ADCM', 0,'none','(P)+A+c→(P)'],
+  0xC5:['SBCM', 0,'none','(P)-A-c→(P)'],
+  0xC6:['TSMA', 0,'none','(P)&A  [undoc]'],
+  0xC7:['CPMA', 0,'none','(P)-A  [compare]'],
+  0xC8:['INCL', 0,'none','L+1→L'],  0xC9:['DECL', 0,'none','L-1→L'],
+  0xCA:['INCN', 0,'none','N+1→N'],  0xCB:['DECN', 0,'none','N-1→N'],
+  0xCC:['INB',  0,'none','IB-Port→A'],
+  0xCD:['NOPW', 0,'none','no operation (alt)'],
+  0xCE:['NOPT', 0,'none','no operation (3cy)'],
+  0xCF:['???',  0,'none','unknown'],
+  0xD0:['SC',   0,'none','1→c, 1→z'],
+  0xD1:['RC',   0,'none','0→c, 1→z'],
+  0xD2:['SR',   0,'none','shift A right, c'],
+  0xD3:['NOPW', 0,'none','no operation (alt)'],
+  0xD4:['ANID', 1,'n8',  '(DP)&n→(DP)'],
+  0xD5:['ORID', 1,'n8',  '(DP)|n→(DP)'],
+  0xD6:['TSID', 1,'n8',  '(DP)&n  [test]'],
+  0xD7:['CPID', 1,'n8',  '(DP)-n  [undoc]'],
+  0xD8:['LEAVE',0,'none','0→(R)'],
+  0xD9:['NOPW', 0,'none','no operation (alt)'],
+  0xDA:['EXAB', 0,'none','A↔B'],
+  0xDB:['EXAM', 0,'none','A↔(P)'],
+  0xDC:['???',  0,'none','unknown'],
+  0xDD:['OUTB', 0,'none','(5D)→IB-Port'],
+  0xDE:['???',  0,'none','unknown'],
+  0xDF:['OUTC', 0,'none','(5F)→C-PORT'],
+});
+
+// CAL $E0–$FF : CAL nm  (bits 4:0 of opcode = high byte of target; next byte = low byte)
+for (let n = 0; n <= 0x1F; n++) OPCODES[0xE0 + n] = ['CAL', 1, 'cal', `call ${h2(n)}xx`];
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+function h2(v)  { return (v & 0xFF).toString(16).toUpperCase().padStart(2,'0'); }
+function h4(v)  { return (v & 0xFFFF).toString(16).toUpperCase().padStart(4,'0'); }
+function lname(addr) { return `L_${h4(addr)}`; }
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/ /g,'&nbsp;');
+}
+
+// ─────────────────────────────────────────────
+// HEX PARSER
+// ─────────────────────────────────────────────
+function parseHex(input) {
+  return input
+    .replace(/[^0-9a-fA-F]/g,' ').trim().split(/\s+/).filter(Boolean)
+    .flatMap(s => {
+      if (s.length === 1) s = '0' + s;
+      const p = [];
+      for (let i = 0; i + 1 < s.length; i += 2) p.push(s.slice(i,i+2));
+      if (s.length % 2) p.push('0' + s.slice(-1));
+      return p;
+    })
+    .map(s => parseInt(s,16))
+    .filter(n => !isNaN(n));
+}
+
+// ─────────────────────────────────────────────
+// DISASSEMBLER CORE
+// Returns array of instruction objects.
+// target = resolved numeric address for branches/calls, or null.
+// ─────────────────────────────────────────────
+function disassembleBytes(bytes, org, bigEndian) {
+  const out = [];
+  let i = 0;
+  while (i < bytes.length) {
+    const addr   = org + i;
+    const opcode = bytes[i];
+    const info   = OPCODES[opcode];
+
+    if (!info) {
+      out.push({ addr, raw:[opcode], mnem:'DB', operand:`$${h2(opcode)}`,
+                 target:null, comment:'undefined opcode', isError:true });
+      i++; continue;
+    }
+
+    const [mnem, xb, fmt, comment] = info;
+    const raw = [opcode];
+    for (let b = 0; b < xb; b++) raw.push(i+1+b < bytes.length ? bytes[i+1+b] : 0);
+
+    let operand = '', target = null;
+
+    switch (fmt) {
+      case 'lp':
+        operand = `$${h2(opcode & 0x3F)}`; break;
+
+      case 'n8':
+        operand = `$${h2(raw[1]??0)}`; break;
+
+      case 'n16': {
+        // SC61860 big-endian: first byte = high, second = low
+        const b1 = raw[1]??0, b2 = raw[2]??0;
+        target  = bigEndian ? ((b1<<8)|b2) : ((b2<<8)|b1);
+        operand = `$${h4(target)}`; break;
+      }
+
+      case 'rel+': {
+        const n = raw[1]??0;
+        target  = (addr + 2 + n) & 0xFFFF;
+        operand = `$${h4(target)}`; break;
+      }
+
+      case 'rel-': {
+        const n = raw[1]??0;
+        target  = (addr + 2 - n) & 0xFFFF;
+        operand = `$${h4(target)}`; break;
+      }
+
+      case 'cal': {
+        target  = ((opcode & 0x1F) << 8) | (raw[1]??0);
+        operand = `$${h4(target)}`; break;
+      }
+
+      case 'ptc': operand = ''; break;
+      case 'dtc': operand = ''; break;
+    }
+
+    out.push({ addr, raw, mnem, operand, target, comment, isError:false });
+    i += 1 + xb;
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────
+// LABEL MAP
+// Build set of addresses that are targets of branches/calls
+// within the disassembled range.
+// ─────────────────────────────────────────────
+function buildLabelMap(lines) {
+  const addrSet  = new Set(lines.map(l => l.addr));
+  const labelMap = new Map();
+  for (const line of lines) {
+    if (line.target !== null && addrSet.has(line.target)) {
+      if (!labelMap.has(line.target))
+        labelMap.set(line.target, lname(line.target));
+    }
+  }
+  return labelMap;
+}
+
+// ─────────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────────
+function disassemble() {
+  const input  = document.getElementById('hex-input').value;
+  const orgStr = document.getElementById('org-addr').value.trim() || '0000';
+  const org    = parseInt(orgStr, 16) || 0;
+
+  const bytes = parseHex(input);
+  if (!bytes.length) { showError('NO VALID HEX BYTES FOUND'); return; }
+
+  const lines    = disassembleBytes(bytes, org, useBigEndian);
+  const labelMap = useLabels ? buildLabelMap(lines) : new Map();
+  renderOutput(lines, org, bytes.length, labelMap);
+}
+
+function renderOutput(lines, org, byteCount, labelMap) {
+  const out  = document.getElementById('output');
+  out.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  let errCount = 0;
+
+  for (const line of lines) {
+
+    // ── Label definition line ──
+    if (labelMap.has(line.addr)) {
+      const ld = document.createElement('div');
+      ld.className = 'label-def';
+      ld.textContent = labelMap.get(line.addr) + ':';
+      frag.appendChild(ld);
+    }
+
+    // ── Instruction line ──
+    if (line.isError) errCount++;
+    const div = document.createElement('div');
+    div.className = 'asm-line'
+      + (line.isError ? ' error-line' : '')
+      + (labelMap.has(line.addr) ? ' jump-target' : '');
+
+    const hexStr = line.raw.map(h2).join(' ');
+
+    // Resolve operand to label or keep address string
+    let dispOperand = line.operand;
+    let isLabelRef  = false;
+    if (useLabels && line.target !== null && labelMap.has(line.target)) {
+      dispOperand = labelMap.get(line.target);
+      isLabelRef  = true;
+    }
+
+    // Comment: add raw target for label-mode branches so addresses are still visible
+    let dispComment = line.comment;
+    if (isLabelRef) dispComment += `  → $${h4(line.target)}`;
+
+    const operandHtml = isLabelRef
+      ? `<span class="col-label">${esc(dispOperand)}</span>`
+      : `<span class="col-operand">${esc(dispOperand)}</span>`;
+
+    div.innerHTML =
+      `<span class="col-addr">$${h4(line.addr)}</span>` +
+      `<span class="col-hex">${esc(hexStr.padEnd(8))}</span>` +
+      `<span class="col-mnem">${esc(line.mnem.padEnd(7))}</span>` +
+      operandHtml +
+      `<span class="col-comment">&nbsp;&nbsp;; ${esc(dispComment)}</span>`;
+
+    frag.appendChild(div);
+  }
+
+  out.appendChild(frag);
+
+  // Stats
+  const endAddr = org + byteCount - 1;
+  document.getElementById('stat-instr').textContent = lines.length;
+  document.getElementById('stat-bytes').textContent = byteCount;
+  document.getElementById('stat-range').textContent = `$${h4(org)} – $${h4(endAddr)}`;
+
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = errCount
+    ? `⚠ DONE — ${errCount} UNKNOWN OPCODE(S)`
+    : '✓ DISASSEMBLY COMPLETE';
+  statusEl.className = errCount ? 'status-err' : 'status-ok';
+
+  const lblCount = labelMap.size;
+  document.getElementById('stats').innerHTML =
+    `<em>${lines.length}</em> instr &bull; <em>${byteCount}</em> bytes` +
+    (lblCount ? ` &bull; <em>${lblCount}</em> labels` : '');
+}
+
+function showError(msg) {
+  document.getElementById('output').innerHTML = `<div class="error-msg">! ${msg}</div>`;
+  document.getElementById('status').textContent = '✗ ' + msg;
+  document.getElementById('status').className   = 'status-err';
+}
+
+// ─────────────────────────────────────────────
+// CLEAR / COPY / SAMPLE
+// ─────────────────────────────────────────────
+function clearAll() {
+  document.getElementById('hex-input').value = '';
+  document.getElementById('output').innerHTML =
+    `<div class="empty-state"><div class="cpu-art">╔══════════════════╗
+║  SC61860 / ESR-H ║
+║   8-BIT CPU      ║
+║   64KB ADDR SPACE║
+╚══════════════════╝</div>ENTER HEX BYTES AND PRESS DISASSEMBLE</div>`;
+  document.getElementById('status').textContent = '■ IDLE';
+  document.getElementById('status').className   = 'status-wait';
+  ['stat-instr','stat-bytes','stat-range'].forEach(id =>
+    document.getElementById(id).textContent = '—');
+  document.getElementById('stats').textContent = 'READY';
+}
+
+function copyOutput() {
+  const rows = document.getElementById('output').querySelectorAll('.asm-line, .label-def');
+  if (!rows.length) return;
+  const text = Array.from(rows).map(r => {
+    if (r.classList.contains('label-def')) return r.textContent.trim();
+    return Array.from(r.querySelectorAll('span')).map(s => s.textContent).join('  ').trimEnd();
+  }).join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-btn');
+    const orig = btn.textContent;
+    btn.textContent = 'COPIED!';
+    setTimeout(() => btn.textContent = orig, 1400);
+  });
+}
+
+function loadSample() {
+  // ORG $8000 — big-endian SC61860 sample with branches, loop, call, jump
+  //
+  // $8000  LIA   $0A          02 0A
+  // $8002  PUSH               34
+  // $8003  LII   $04          00 04
+  // $8005  LDM                59       ← loop target L_8005
+  // $8006  INCA               42
+  // $8007  LOOP  $8005        2F 00    ; (8009 - 2 - 0) = 8007... n=0 means loop body 1 time
+  //                                    ; use n=01 for actual looping: 2F 01 → 800B-2-1=8008
+  // $8009  RTN                37
+  //                                    ;
+  // $800A  ADIA  $10          74 10    ← sub target L_800A
+  // $800C  CPIA  $80          67 80
+  // $800E  JRZP  $03          38 03    ; z=1 → $800E+2+3 = $8013
+  // $8010  JRP   $01          2C 01    ; → $8010+2+1 = $8013
+  // $8012  INCA               42
+  // $8013  RTN                37       ← branch target L_8013
+  //                                    ;
+  // $8014  CALL  $800A        78 80 0A ; big-endian: hi=80 lo=0A
+  // $8017  JP    $8000        79 80 00
+  // $801A  JPNZ  $8005        7C 80 05
+  // $801D  RTN                37
+  document.getElementById('hex-input').value = [
+    '02 0A 34 00 04',
+    '59 42 2F 01 37',
+    '74 10 67 80 38 03 2C 01 42 37',
+    '78 80 0A 79 80 00 7C 80 05 37'
+  ].join('\n');
+  document.getElementById('org-addr').value = '8000';
+  disassemble();
+}
+
+// Ctrl/Cmd+Enter shortcut
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') disassemble();
+});
+</script>
+</body>
+</html>
