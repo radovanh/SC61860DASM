@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC61860 Assembler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0a0c10;
+    --panel:   #0f1319;
+    --border:  #1e2d3d;
+    --accent:  #00e5ff;
+    --accent2: #ff6b35;
+    --green:   #39ff14;
+    --purple:  #c792ea;
+    --yellow:  #e8d87a;
+    --dim:     #3a4a5a;
+    --text:    #c8d8e8;
+    --muted:   #5a7a8a;
+    --error:   #ff4444;
+    --warn:    #ffaa00;
+    --glow:    0 0 8px rgba(0,229,255,0.4);
+    --glow2:   0 0 8px rgba(57,255,20,0.3);
+    --glow3:   0 0 8px rgba(199,146,234,0.4);
+    --glowe:   0 0 8px rgba(255,68,68,0.4);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    display: flex; flex-direction: column;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.10) 2px, rgba(0,0,0,0.10) 4px);
+    pointer-events: none; z-index: 9999;
+  }
+
+  /* ── HEADER ── */
+  header {
+    flex-shrink: 0; border-bottom: 1px solid var(--border);
+    padding: 16px 28px; display: flex; align-items: center; gap: 20px;
+    background: linear-gradient(180deg, rgba(255,107,53,0.04) 0%, transparent 100%);
+    position: relative;
+  }
+  header::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent2), transparent); opacity: 0.45;
+  }
+  .logo { font-family: 'Orbitron', monospace; font-weight: 900; font-size: 20px; color: var(--accent2); text-shadow: 0 0 12px rgba(255,107,53,0.5); letter-spacing: 2px; white-space: nowrap; text-decoration: none; }
+  .logo span { color: var(--accent); text-shadow: var(--glow); }
+  .tagline { color: var(--muted); font-size: 11px; letter-spacing: 1px; }
+  .badge { margin-left: auto; font-size: 11px; color: var(--muted); text-align: right; line-height: 1.6; }
+  .badge em { color: var(--accent2); font-style: normal; }
+  .nav-back { font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700; color: var(--muted); text-decoration: none; letter-spacing: 1px; border: 1px solid var(--dim); padding: 5px 12px; border-radius: 2px; transition: all 0.2s; }
+  .nav-back:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ── CONTROLS ── */
+  .controls {
+    flex-shrink: 0; background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 9px 28px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; row-gap: 7px;
+  }
+  label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  input[type="text"] {
+    background: var(--bg); border: 1px solid var(--border); color: var(--accent2);
+    font-family: 'Share Tech Mono', monospace; font-size: 13px;
+    padding: 5px 9px; border-radius: 2px; outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  input[type="text"]:focus { border-color: var(--accent2); box-shadow: 0 0 8px rgba(255,107,53,0.3); }
+  #org-addr { width: 76px; }
+
+  /* output mode toggle */
+  .toggle-group { display: flex; align-items: center; gap: 7px; }
+  .toggle-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
+  .toggle-wrap {
+    position: relative; display: flex; align-items: stretch;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 2px; overflow: hidden; cursor: pointer; user-select: none; height: 28px;
+  }
+  .toggle-opt {
+    padding: 0 12px; display: flex; align-items: center;
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; color: var(--muted); transition: color 0.18s;
+    position: relative; z-index: 1; white-space: nowrap;
+  }
+  .toggle-slider {
+    position: absolute; top: 2px; bottom: 2px; border-radius: 1px;
+    transition: left 0.16s cubic-bezier(.4,0,.2,1), width 0.16s cubic-bezier(.4,0,.2,1); z-index: 0;
+  }
+  .toggle-wrap.view .toggle-slider { background: rgba(255,107,53,0.12); border: 1px solid rgba(255,107,53,0.55); }
+  .toggle-wrap.view .toggle-opt.active { color: var(--accent2); text-shadow: 0 0 8px rgba(255,107,53,0.4); }
+
+  .btn {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; padding: 0 15px; border: 1px solid currentColor;
+    background: transparent; cursor: pointer; border-radius: 2px;
+    transition: all 0.2s; text-transform: uppercase; white-space: nowrap;
+    height: 28px; display: flex; align-items: center; gap: 5px;
+  }
+  .btn-primary  { color: var(--accent2); border-color: var(--accent2); }
+  .btn-primary:hover  { background: rgba(255,107,53,0.1); box-shadow: 0 0 8px rgba(255,107,53,0.3); }
+  .btn-secondary { color: var(--muted); border-color: var(--dim); }
+  .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+  .btn-danger    { color: var(--error); border-color: var(--error); }
+  .btn-danger:hover   { background: rgba(255,68,68,0.08); }
+
+  .sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+  .stat-pill { font-size: 11px; color: var(--muted); margin-left: auto; }
+  .stat-pill em { color: var(--green); font-style: normal; font-weight: bold; }
+
+  /* ── WORKSPACE ── */
+  .workspace { flex: 1; display: flex; flex-direction: row; min-height: 0; overflow: hidden; }
+
+  .pane { display: flex; flex-direction: column; min-width: 120px; min-height: 0; overflow: hidden; }
+  #pane-left  { flex: 0 0 auto; width: 50%; }
+  #pane-right { flex: 1 1 0; }
+
+  .pane-header {
+    flex-shrink: 0; padding: 9px 18px; background: var(--panel);
+    border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted);
+    letter-spacing: 2px; text-transform: uppercase; display: flex; align-items: center; gap: 8px;
+  }
+  .pane-header .dot {
+    width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+    background: var(--accent2); box-shadow: 0 0 8px rgba(255,107,53,0.5); animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── EDITOR ── */
+  .editor-wrap { flex: 1; display: flex; overflow: hidden; position: relative; }
+  .line-nums {
+    flex-shrink: 0; width: 42px; padding: 18px 0;
+    background: var(--panel); border-right: 1px solid var(--border);
+    color: var(--dim); font-size: 13px; line-height: 1.7;
+    text-align: right; overflow: hidden; user-select: none;
+    font-family: 'Share Tech Mono', monospace;
+  }
+  .line-num { padding-right: 8px; display: block; }
+  .line-num.has-error { color: var(--error); }
+
+  #asm-input {
+    flex: 1; background: var(--bg); border: none;
+    color: var(--text); font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; line-height: 1.7; padding: 18px 18px 18px 12px;
+    resize: none; outline: none; letter-spacing: 0.3px; tab-size: 8;
+    overflow-y: auto; overflow-x: auto;
+    /* sync scroll with line numbers */
+  }
+  #asm-input::placeholder { color: var(--dim); }
+
+  /* ── SPLITTER ── */
+  #splitter {
+    flex-shrink: 0; width: 6px; background: var(--border);
+    cursor: col-resize; position: relative; transition: background 0.15s; user-select: none;
+  }
+  #splitter:hover, #splitter.dragging { background: var(--accent2); box-shadow: 0 0 10px rgba(255,107,53,0.35); }
+  #splitter::before {
+    content: ''; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%); width: 2px; height: 32px;
+    background: repeating-linear-gradient(180deg, var(--muted) 0px, var(--muted) 2px, transparent 2px, transparent 5px);
+    border-radius: 1px; opacity: 0.5;
+  }
+  #splitter:hover::before, #splitter.dragging::before { opacity: 1; }
+
+  /* ── OUTPUT PANE ── */
+  #output-scroll {
+    flex: 1; overflow-x: auto; overflow-y: auto;
+    padding: 12px 0; background: var(--bg); scroll-behavior: smooth;
+  }
+  #output-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+  #output-scroll::-webkit-scrollbar-track { background: var(--bg); }
+  #output-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  #output-scroll::-webkit-scrollbar-corner { background: var(--bg); }
+  #output-inner { display: inline-block; min-width: 100%; }
+
+  /* listing row */
+  .lst-row {
+    display: flex; flex-direction: row; align-items: baseline;
+    padding: 2px 18px; font-size: 13px; line-height: 1.75;
+    white-space: nowrap; border-left: 2px solid transparent;
+    transition: background 0.1s;
+  }
+  .lst-row:hover { background: rgba(255,255,255,0.03); }
+  .lst-row.lst-error { border-left-color: var(--error); background: rgba(255,68,68,0.06); }
+  .lst-row.lst-label-def { border-left-color: var(--purple); }
+
+  .lc-line   { color: var(--dim);     width: 36px;  flex-shrink: 0; font-size: 11px; }
+  .lc-addr   { color: var(--accent2); width: 56px;  flex-shrink: 0; }
+  .lc-bytes  { color: var(--accent);  width: 110px; flex-shrink: 0; letter-spacing: 0.5px; font-size: 12px; }
+  .lc-src    { color: var(--text);    flex-shrink: 0; }
+  .lc-src .t-label  { color: var(--purple); }
+  .lc-src .t-mnem   { color: var(--green); font-weight: bold; }
+  .lc-src .t-operand{ color: var(--yellow); }
+  .lc-src .t-dir    { color: var(--accent); }
+  .lc-src .t-comment{ color: var(--muted); font-size: 11px; }
+  .lc-src .t-error  { color: var(--error); font-size: 11px; }
+
+  /* hex output view */
+  .hex-block { padding: 16px 20px; font-size: 13px; line-height: 1.7; white-space: pre; color: var(--accent); }
+  .hex-block .hb-addr { color: var(--accent2); }
+  .hex-block .hb-sep  { color: var(--dim); }
+
+  /* symbol table */
+  .sym-table { padding: 16px 20px; }
+  .sym-row { display: flex; gap: 0; font-size: 12px; line-height: 1.8; white-space: nowrap; }
+  .sym-name { color: var(--purple); width: 160px; flex-shrink: 0; }
+  .sym-val  { color: var(--accent2); width: 70px; flex-shrink: 0; }
+  .sym-refs { color: var(--muted); }
+
+  /* error panel */
+  .err-panel { padding: 14px 20px; }
+  .err-item { display: flex; gap: 12px; font-size: 12px; line-height: 1.7; white-space: nowrap; margin-bottom: 3px; }
+  .err-loc  { color: var(--warn); width: 60px; flex-shrink: 0; }
+  .err-msg  { color: var(--error); }
+
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; color: var(--dim); font-family: 'VT323', monospace; font-size: 22px;
+    gap: 12px; text-align: center; padding: 40px;
+  }
+  .empty-state .cpu-art { font-size: 12px; line-height: 1.4; color: var(--border); white-space: pre; font-family: 'Share Tech Mono', monospace; }
+
+  /* ── FOOTER ── */
+  footer {
+    flex-shrink: 0; border-top: 1px solid var(--border); padding: 7px 28px;
+    display: flex; align-items: center; gap: 22px; background: var(--panel);
+    font-size: 11px; color: var(--muted); letter-spacing: 0.5px; flex-wrap: wrap;
+  }
+  footer span em { color: var(--text); font-style: normal; }
+  .status-ok   { color: var(--green); }
+  .status-err  { color: var(--error); }
+  .status-warn { color: var(--warn); }
+  .status-wait { color: var(--muted); }
+
+  /* output view tabs */
+  .out-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--panel); }
+  .out-tab {
+    padding: 8px 18px; font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; color: var(--muted); cursor: pointer; border-right: 1px solid var(--border);
+    transition: color 0.15s, background 0.15s; user-select: none; white-space: nowrap;
+  }
+  .out-tab:hover { color: var(--text); }
+  .out-tab.active { color: var(--accent2); background: rgba(255,107,53,0.06); }
+
+  @media (max-width: 700px) {
+    .workspace { flex-direction: column; }
+    #pane-left { width: 100% !important; flex: 0 0 250px; }
+    #splitter { width: 100%; height: 6px; cursor: row-resize; }
+    #pane-right { flex: 1; min-height: 200px; }
+    header { padding: 12px 14px; }
+    .controls { padding: 8px 14px; }
+    footer { padding: 7px 14px; gap: 14px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo"><a class="logo" href="index.html">SC<span>61860</span></a></div>
+    <div class="tagline">SHARP ESR-H CPU ASSEMBLER &bull; TWO-PASS &bull; PC-12xx / 13xx / 14xx</div>
+  </div>
+  <a class="nav-back" href="index.html">&#8592; INDEX</a>
+  <div class="badge">CPU: <em>HITACHI SC61860</em><br>ARCH: <em>ESR-H / 8-bit</em></div>
+</header>
+
+<div class="controls">
+  <label>ORG</label>
+  <input type="text" id="org-addr" value="8000" maxlength="4" spellcheck="false" title="Default origin address (hex). Override with .ORG directive in source.">
+
+  <div class="sep"></div>
+
+  <button class="btn btn-primary" onclick="assemble()">&#9654;&nbsp;ASSEMBLE</button>
+  <button class="btn btn-secondary" onclick="loadSample()">SAMPLE</button>
+  <button class="btn btn-danger" onclick="clearAll()">CLEAR</button>
+  <div class="sep"></div>
+  <button class="btn btn-secondary" id="copy-btn" onclick="copyOutput()">COPY HEX</button>
+
+  <div class="stat-pill" id="stats">READY</div>
+</div>
+
+<div class="workspace">
+
+  <!-- LEFT: source editor -->
+  <div class="pane" id="pane-left">
+    <div class="pane-header">
+      <div class="dot"></div>
+      ASSEMBLY SOURCE
+    </div>
+    <div class="editor-wrap">
+      <div class="line-nums" id="line-nums"></div>
+      <textarea id="asm-input" spellcheck="false"
+        placeholder="; SC61860 Assembly&#10;; Labels end with colon, e.g.  loop:&#10;; Directives: .ORG  .DB  .DW  .EQU&#10;; Numbers: $FF (hex)  %1010 (bin)  42 (dec)&#10;; Ctrl+Enter to assemble&#10;&#10;        .ORG    $8000&#10;"></textarea>
+    </div>
+  </div>
+
+  <!-- SPLITTER -->
+  <div id="splitter"></div>
+
+  <!-- RIGHT: output -->
+  <div class="pane" id="pane-right">
+    <div class="out-tabs">
+      <div class="out-tab active" id="tab-listing" onclick="switchTab('listing')">LISTING</div>
+      <div class="out-tab" id="tab-hex"     onclick="switchTab('hex')">HEX OUTPUT</div>
+      <div class="out-tab" id="tab-symbols" onclick="switchTab('symbols')">SYMBOLS</div>
+      <div class="out-tab" id="tab-errors"  onclick="switchTab('errors')">ERRORS <span id="err-count-badge"></span></div>
+    </div>
+    <div id="output-scroll">
+      <div id="output-inner">
+        <div class="empty-state">
+          <div class="cpu-art"> ┌──────────────────┐
+ │  SC61860  ASM    │
+ │  TWO-PASS        │
+ │  ASSEMBLER       │
+ └──────────────────┘</div>
+          ENTER SOURCE AND PRESS ASSEMBLE
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <span id="status" class="status-wait">&#9632; IDLE</span>
+  <span>BYTES: <em id="stat-bytes">—</em></span>
+  <span>LABELS: <em id="stat-labels">—</em></span>
+  <span>ERRORS: <em id="stat-errors">—</em></span>
+  <span style="margin-left:auto;color:var(--border)">UTZ82/SC61860-INSTRUCTION-SET</span>
+</footer>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════
+// SPLITTER
+// ══════════════════════════════════════════════════════════
+(function() {
+  const splitter = document.getElementById('splitter');
+  const paneLeft = document.getElementById('pane-left');
+  const workspace = document.querySelector('.workspace');
+  let dragging = false, startX, startW;
+  splitter.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX; startW = paneLeft.getBoundingClientRect().width;
+    splitter.classList.add('dragging'); document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none'; e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const totalW = workspace.getBoundingClientRect().width;
+    paneLeft.style.width = Math.min(Math.max(startW + (e.clientX - startX), 120), totalW - 7 - 120) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return; dragging = false;
+    splitter.classList.remove('dragging'); document.body.style.cursor = ''; document.body.style.userSelect = '';
+  });
+  splitter.addEventListener('touchstart', e => {
+    dragging = true; startX = e.touches[0].clientX; startW = paneLeft.getBoundingClientRect().width;
+    splitter.classList.add('dragging'); e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const totalW = workspace.getBoundingClientRect().width;
+    paneLeft.style.width = Math.min(Math.max(startW + (e.touches[0].clientX - startX), 120), totalW - 7 - 120) + 'px';
+  }, { passive: true });
+  document.addEventListener('touchend', () => { dragging = false; splitter.classList.remove('dragging'); });
+})();
+
+// ══════════════════════════════════════════════════════════
+// LINE NUMBERS
+// ══════════════════════════════════════════════════════════
+const asmInput = document.getElementById('asm-input');
+const lineNums = document.getElementById('line-nums');
+let errorLines = new Set();
+
+function updateLineNums() {
+  const lines = asmInput.value.split('\n');
+  const n = lines.length;
+  let html = '';
+  for (let i = 1; i <= n; i++) {
+    const cls = errorLines.has(i) ? ' has-error' : '';
+    html += `<span class="line-num${cls}">${i}</span>`;
+  }
+  lineNums.innerHTML = html;
+}
+
+asmInput.addEventListener('input', updateLineNums);
+asmInput.addEventListener('scroll', () => { lineNums.scrollTop = asmInput.scrollTop; });
+window.addEventListener('load', updateLineNums);
+
+// Tab key → insert spaces
+asmInput.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = asmInput.selectionStart, en = asmInput.selectionEnd;
+    asmInput.value = asmInput.value.slice(0, s) + '        ' + asmInput.value.slice(en);
+    asmInput.selectionStart = asmInput.selectionEnd = s + 8;
+    updateLineNums();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') assemble();
+});
+
+// ══════════════════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════════════════
+let currentTab = 'listing';
+let lastResult = null;
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.out-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (lastResult) renderTab(lastResult);
+}
+
+// ══════════════════════════════════════════════════════════
+// INSTRUCTION DEFINITIONS FOR ASSEMBLER
+// Format: MNEMONIC -> { opcode, operand }
+// operand types:
+//   'none'  – no operand bytes
+//   'imm8'  – 1-byte immediate $xx
+//   'addr'  – 2-byte address (big-endian)
+//   'rel'   – 1-byte relative offset (direction encoded per mnemonic)
+//   'lp'    – LP n  (0..63, encoded as 0x80+n)
+//   'cal'   – CAL nm (hi-nibble from opcode group, lo byte operand)
+// ══════════════════════════════════════════════════════════
+
+// Instruction table: name → [baseOpcode, operandType, relDir?]
+// relDir: 'fwd' = PC+2+n, 'bwd' = PC+2-n
+const MNEMONICS = {};
+
+function defM(name, op, type, dir) {
+  const key = name.toUpperCase();
+  if (!MNEMONICS[key]) MNEMONICS[key] = [];
+  MNEMONICS[key].push({ op, type, dir: dir || null });
+}
+
+// No-operand instructions
+const NONE_OPS = [
+  ['IX',0x04],['DX',0x05],['IY',0x06],['DY',0x07],
+  ['MVW',0x08],['EXW',0x09],['MVB',0x0A],['EXB',0x0B],
+  ['ADN',0x0C],['SBN',0x0D],['ADW',0x0E],['SBW',0x0F],
+  ['ADB',0x14],['SBB',0x15],
+  ['MVWD',0x18],['EXWD',0x19],['MVBD',0x1A],['EXBD',0x1B],
+  ['SRW',0x1C],['SLW',0x1D],['FILM',0x1E],['FILD',0x1F],
+  ['LDP',0x20],['LDQ',0x21],['LDR',0x22],['CLRA',0x23],
+  ['IXL',0x24],['DXL',0x25],['IYS',0x26],['DYS',0x27],
+  ['STP',0x30],['STQ',0x31],['STR',0x32],['STH',0x33],
+  ['PUSH',0x34],['DATA',0x35],['RTN',0x37],
+  ['INCI',0x40],['DECI',0x41],['INCA',0x42],['DECA',0x43],
+  ['ADM',0x44],['SBM',0x45],['ANMA',0x46],['ORMA',0x47],
+  ['INCK',0x48],['DECK',0x49],['INCM',0x4A],['DECM',0x4B],
+  ['INA',0x4C],['NOPW',0x4D],['CUP',0x4F],
+  ['INCP',0x50],['DECP',0x51],['STD',0x52],['MVDM',0x53],
+  ['MVMP',0x54],['MVMD',0x55],['LDPC',0x56],['LDD',0x57],
+  ['SWP',0x58],['LDM',0x59],['SL',0x5A],['POP',0x5B],
+  ['OUTA',0x5D],['OUTF',0x5F],
+  ['CDN',0x6F],['NOPT',0xCE],
+  ['INCJ',0xC0],['DECJ',0xC1],['INCB',0xC2],['DECB',0xC3],
+  ['ADCM',0xC4],['SBCM',0xC5],['TSMA',0xC6],['CPMA',0xC7],
+  ['INCL',0xC8],['DECL',0xC9],['INCN',0xCA],['DECN',0xCB],
+  ['INB',0xCC],['SC',0xD0],['RC',0xD1],['SR',0xD2],
+  ['LEAVE',0xD8],['EXAB',0xDA],['EXAM',0xDB],
+  ['OUTB',0xDD],['OUTC',0xDF],['HALT',0x7B],
+  ['PTC',0x7A],['DTC',0x69],
+];
+NONE_OPS.forEach(([n,op]) => defM(n, op, 'none'));
+
+// imm8 instructions
+const IMM8_OPS = [
+  ['LII',0x00],['LIJ',0x01],['LIA',0x02],['LIB',0x03],
+  ['LIDL',0x11],['LIP',0x12],['LIQ',0x13],
+  ['WAIT',0x4E],['ANIM',0x60],['ORIM',0x61],['TSIM',0x62],
+  ['CPIM',0x63],['ANIA',0x64],['ORIA',0x65],['TSIA',0x66],
+  ['CPIA',0x67],['TEST',0x6B],['ADIM',0x70],['SBIM',0x71],
+  ['LIIH',0x72],['ADIA',0x74],['SBIA',0x75],
+  ['ANID',0xD4],['ORID',0xD5],['TSID',0xD6],['CPID',0xD7],
+];
+IMM8_OPS.forEach(([n,op]) => defM(n, op, 'imm8'));
+
+// addr (2-byte big-endian)
+const ADDR_OPS = [
+  ['LIDP',0x10],['CALL',0x78],['JP',0x79],
+  ['JPNZ',0x7C],['JPNC',0x7D],['JPZ',0x7E],['JPC',0x7F],
+];
+ADDR_OPS.forEach(([n,op]) => defM(n, op, 'addr'));
+
+// relative branches: fwd = PC+2+n, bwd = PC+2-n
+const REL_OPS = [
+  ['JRNZP',0x28,'fwd'],['JRNZM',0x29,'bwd'],
+  ['JRNCP',0x2A,'fwd'],['JRNCM',0x2B,'bwd'],
+  ['JRP',  0x2C,'fwd'],['JRM',  0x2D,'bwd'],
+  ['LOOP', 0x2F,'bwd'],
+  ['JRZP', 0x38,'fwd'],['JRZM', 0x39,'bwd'],
+  ['JRCP', 0x3A,'fwd'],['JRCM', 0x3B,'bwd'],
+];
+REL_OPS.forEach(([n,op,d]) => defM(n, op, 'rel', d));
+
+// LP n  (n = 0..63)
+defM('LP', 0x80, 'lp');
+
+// CAL nm  — hi 5 bits come from page (0..31), lo byte = operand
+// We encode CAL as a special case; the opcode = 0xE0 | (addr >> 8)
+defM('CAL', 0xE0, 'cal');
+
+// ══════════════════════════════════════════════════════════
+// EXPRESSION EVALUATOR
+// Supports: $hex, %bin, decimal, labels, +, -, *, /, ()
+// ══════════════════════════════════════════════════════════
+function evalExpr(str, symbols, currentAddr) {
+  str = str.trim();
+  if (!str) throw new Error('empty expression');
+
+  // Replace labels and special symbols
+  // Replace $ (current address) only when standalone
+  str = str.replace(/\b\$\b/g, currentAddr);
+
+  // Replace $HHHH hex literals
+  str = str.replace(/\$([0-9a-fA-F]+)/g, (_, h) => parseInt(h, 16));
+
+  // Replace %BBBB binary literals
+  str = str.replace(/%([01]+)/g, (_, b) => parseInt(b, 2));
+
+  // Replace label names (must come after $ and % substitutions)
+  // Sort by length descending to avoid partial matches
+  const labelNames = Object.keys(symbols).sort((a, b) => b.length - a.length);
+  for (const lbl of labelNames) {
+    // Only replace whole-word occurrences
+    const re = new RegExp('(?<![A-Za-z0-9_])' + lbl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z0-9_])', 'g');
+    str = str.replace(re, symbols[lbl]);
+  }
+
+  // Validate: only allow digits, operators, parens, spaces
+  if (!/^[\d\s+\-*/()^&|~<>]+$/.test(str)) {
+    throw new Error(`unresolved symbol in: ${str}`);
+  }
+
+  try {
+    // eslint-disable-next-line no-new-func
+    const result = Function('"use strict"; return (' + str + ')')();
+    if (typeof result !== 'number' || !isFinite(result)) throw new Error('non-numeric result');
+    return result & 0xFFFF;
+  } catch {
+    throw new Error(`cannot evaluate: ${str}`);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// TOKENIZER / LINE PARSER
+// Returns { label, mnem, operand, comment, raw }
+// ══════════════════════════════════════════════════════════
+function parseLine(line) {
+  let raw = line;
+  // strip comment
+  let comment = '';
+  const ci = line.indexOf(';');
+  if (ci >= 0) { comment = line.slice(ci); line = line.slice(0, ci); }
+
+  line = line.trim();
+  let label = null, mnem = null, operand = null;
+
+  if (!line) return { label, mnem, operand, comment, raw };
+
+  // Label: starts at column 0 (no leading whitespace before it) and ends with ':'
+  // OR the whole token before any whitespace ends with ':'
+  const labelMatch = line.match(/^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)/);
+  if (labelMatch) {
+    label = labelMatch[1].toUpperCase();
+    line  = labelMatch[2].trim();
+  }
+
+  if (!line) return { label, mnem, operand, comment, raw };
+
+  // mnemonic is first whitespace-delimited token
+  const parts = line.match(/^(\S+)\s*(.*)/);
+  if (parts) {
+    mnem    = parts[1].toUpperCase();
+    operand = parts[2].trim() || null;
+  }
+
+  return { label, mnem, operand, comment, raw };
+}
+
+// ══════════════════════════════════════════════════════════
+// TWO-PASS ASSEMBLER
+// ══════════════════════════════════════════════════════════
+function assembleSource(source, defaultOrg) {
+  const lines   = source.split('\n');
+  const errors  = [];    // { line (1-based), msg }
+  const symbols = {};    // name → value (resolved addresses / EQU values)
+  const output  = [];    // { lineNum, addr, bytes[], src:{label,mnem,operand,comment,raw} }
+
+  function addError(lineNum, msg) { errors.push({ lineNum, msg }); }
+
+  // ── PASS 1: collect labels, compute addresses ──
+  let addr = defaultOrg;
+  const pass1 = [];  // array of { lineNum, addr, src, size }
+
+  for (let i = 0; i < lines.length; i++) {
+    const lineNum = i + 1;
+    const src = parseLine(lines[i]);
+    let size = 0;
+    let lineAddr = addr;
+
+    // EQU directive: assign value without advancing PC
+    if (src.mnem === '.EQU' || src.mnem === 'EQU') {
+      if (src.label) {
+        try {
+          symbols[src.label] = evalExpr(src.operand || '0', symbols, addr);
+        } catch(e) {
+          addError(lineNum, `.EQU: ${e.message}`);
+          symbols[src.label] = 0;
+        }
+      } else {
+        addError(lineNum, '.EQU without a label');
+      }
+      pass1.push({ lineNum, addr: lineAddr, src, size: 0 });
+      continue;
+    }
+
+    // ORG directive
+    if (src.mnem === '.ORG' || src.mnem === 'ORG') {
+      if (src.operand) {
+        try { addr = evalExpr(src.operand, symbols, addr) & 0xFFFF; }
+        catch(e) { addError(lineNum, `.ORG: ${e.message}`); }
+      }
+      pass1.push({ lineNum, addr, src, size: 0 });
+      continue;
+    }
+
+    // DB directive
+    if (src.mnem === '.DB' || src.mnem === 'DB') {
+      if (src.operand) {
+        const items = splitOperands(src.operand);
+        size = items.length;
+      }
+      pass1.push({ lineNum, addr: lineAddr, src, size });
+      addr = (addr + size) & 0xFFFF;
+      continue;
+    }
+
+    // DW directive (2 bytes per value, big-endian)
+    if (src.mnem === '.DW' || src.mnem === 'DW') {
+      if (src.operand) {
+        const items = splitOperands(src.operand);
+        size = items.length * 2;
+      }
+      pass1.push({ lineNum, addr: lineAddr, src, size });
+      addr = (addr + size) & 0xFFFF;
+      continue;
+    }
+
+    // DS directive (define space)
+    if (src.mnem === '.DS' || src.mnem === 'DS') {
+      if (src.operand) {
+        try { size = evalExpr(src.operand, symbols, addr) & 0xFFFF; }
+        catch(e) { addError(lineNum, `.DS: ${e.message}`); size = 0; }
+      }
+      pass1.push({ lineNum, addr: lineAddr, src, size });
+      addr = (addr + size) & 0xFFFF;
+      continue;
+    }
+
+    // Label definition (standalone or on instruction line)
+    if (src.label) {
+      symbols[src.label] = lineAddr;
+    }
+
+    // Instruction
+    if (src.mnem) {
+      size = instrSize(src.mnem, src.operand);
+    }
+
+    pass1.push({ lineNum, addr: lineAddr, src, size });
+    addr = (lineAddr + size) & 0xFFFF;
+  }
+
+  // ── PASS 2: emit bytes ──
+  for (const item of pass1) {
+    const { lineNum, src } = item;
+    const itemAddr = item.addr;
+    let bytes = [];
+
+    // Re-process label-only EQU
+    if (src.mnem === '.EQU' || src.mnem === 'EQU') {
+      output.push({ lineNum, addr: itemAddr, bytes: [], src });
+      continue;
+    }
+
+    if (src.mnem === '.ORG' || src.mnem === 'ORG') {
+      output.push({ lineNum, addr: itemAddr, bytes: [], src });
+      continue;
+    }
+
+    if (src.mnem === '.DB' || src.mnem === 'DB') {
+      if (src.operand) {
+        const items = splitOperands(src.operand);
+        for (const it of items) {
+          try {
+            const v = evalExpr(it.trim(), symbols, itemAddr);
+            if (v < 0 || v > 255) addError(lineNum, `.DB value out of range: ${it}`);
+            bytes.push(v & 0xFF);
+          } catch(e) { addError(lineNum, `.DB: ${e.message}`); bytes.push(0); }
+        }
+      }
+      output.push({ lineNum, addr: itemAddr, bytes, src });
+      continue;
+    }
+
+    if (src.mnem === '.DW' || src.mnem === 'DW') {
+      if (src.operand) {
+        const items = splitOperands(src.operand);
+        for (const it of items) {
+          try {
+            const v = evalExpr(it.trim(), symbols, itemAddr);
+            bytes.push((v >> 8) & 0xFF, v & 0xFF); // big-endian
+          } catch(e) { addError(lineNum, `.DW: ${e.message}`); bytes.push(0, 0); }
+        }
+      }
+      output.push({ lineNum, addr: itemAddr, bytes, src });
+      continue;
+    }
+
+    if (src.mnem === '.DS' || src.mnem === 'DS') {
+      bytes = new Array(item.size).fill(0);
+      output.push({ lineNum, addr: itemAddr, bytes, src });
+      continue;
+    }
+
+    if (!src.mnem) {
+      // blank / comment-only line
+      output.push({ lineNum, addr: itemAddr, bytes: [], src });
+      continue;
+    }
+
+    // Instruction encoding
+    try {
+      bytes = encodeInstr(src.mnem, src.operand, itemAddr, symbols, lineNum, addError);
+    } catch(e) {
+      addError(lineNum, e.message);
+      bytes = [];
+    }
+
+    output.push({ lineNum, addr: itemAddr, bytes, src });
+  }
+
+  return { output, symbols, errors };
+}
+
+// ── instruction size estimate for pass 1 ──
+function instrSize(mnem, operand) {
+  if (!mnem) return 0;
+  const m = mnem.toUpperCase();
+  const defs = MNEMONICS[m];
+  if (!defs) return 1; // assume 1 for unknown (will error in pass 2)
+  const d = defs[0];
+  switch(d.type) {
+    case 'none': return 1;
+    case 'imm8': return 2;
+    case 'addr': return 3;
+    case 'rel':  return 2;
+    case 'lp':   return 1;
+    case 'cal':  return 2;
+    default: return 1;
+  }
+}
+
+// ── encode a single instruction, return byte array ──
+function encodeInstr(mnem, operand, addr, symbols, lineNum, addError) {
+  const m = mnem.toUpperCase();
+  const defs = MNEMONICS[m];
+
+  if (!defs) throw new Error(`unknown mnemonic: ${mnem}`);
+
+  const def = defs[0];
+  const bytes = [];
+  let val;
+
+  switch(def.type) {
+    case 'none':
+      bytes.push(def.op);
+      break;
+
+    case 'lp': {
+      if (operand === null) throw new Error('LP requires operand');
+      val = evalExpr(operand, symbols, addr);
+      if (val < 0 || val > 63) throw new Error(`LP operand out of range (0–63): ${val}`);
+      bytes.push(0x80 | (val & 0x3F));
+      break;
+    }
+
+    case 'imm8': {
+      if (operand === null) throw new Error(`${mnem} requires immediate byte`);
+      val = evalExpr(operand, symbols, addr);
+      if (val < 0 || val > 255) throw new Error(`${mnem} immediate out of range (0–255): ${val}`);
+      bytes.push(def.op, val & 0xFF);
+      break;
+    }
+
+    case 'addr': {
+      if (operand === null) throw new Error(`${mnem} requires address`);
+      val = evalExpr(operand, symbols, addr) & 0xFFFF;
+      bytes.push(def.op, (val >> 8) & 0xFF, val & 0xFF); // big-endian
+      break;
+    }
+
+    case 'rel': {
+      if (operand === null) throw new Error(`${mnem} requires branch target`);
+      const target = evalExpr(operand, symbols, addr) & 0xFFFF;
+      const instrEnd = (addr + 2) & 0xFFFF;
+      let offset;
+      if (def.dir === 'fwd') {
+        offset = (target - instrEnd) & 0xFFFF;
+        if (offset > 255) throw new Error(`${mnem}: forward branch target too far (+${offset}), max 255`);
+      } else {
+        offset = (instrEnd - target) & 0xFFFF;
+        if (offset > 255) throw new Error(`${mnem}: backward branch target too far (-${offset}), max 255`);
+      }
+      bytes.push(def.op, offset & 0xFF);
+      break;
+    }
+
+    case 'cal': {
+      if (operand === null) throw new Error('CAL requires address');
+      val = evalExpr(operand, symbols, addr) & 0xFFFF;
+      const hiNibble = (val >> 8) & 0x1F;
+      const loNibble = val & 0xFF;
+      if ((val >> 13) !== 0) throw new Error(`CAL target $${h4(val)} out of range (max $1FFF)`);
+      bytes.push(0xE0 | hiNibble, loNibble);
+      break;
+    }
+
+    default:
+      throw new Error(`unhandled operand type: ${def.type}`);
+  }
+  return bytes;
+}
+
+// Split comma-separated operands, respecting parentheses
+function splitOperands(str) {
+  const parts = []; let cur = '', depth = 0;
+  for (const ch of str) {
+    if (ch === '(' || ch === '[') { depth++; cur += ch; }
+    else if (ch === ')' || ch === ']') { depth--; cur += ch; }
+    else if (ch === ',' && depth === 0) { parts.push(cur.trim()); cur = ''; }
+    else cur += ch;
+  }
+  if (cur.trim()) parts.push(cur.trim());
+  return parts;
+}
+
+// ══════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════
+function h2(v) { return (v & 0xFF).toString(16).toUpperCase().padStart(2, '0'); }
+function h4(v) { return (v & 0xFFFF).toString(16).toUpperCase().padStart(4, '0'); }
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/ /g,'&nbsp;');
+}
+
+// Syntax-highlight a source token string for the listing
+function hlSrc(src) {
+  const { label, mnem, operand, comment } = src;
+  let html = '';
+
+  if (label)   html += `<span class="t-label">${esc(label)}:</span> `;
+
+  if (mnem) {
+    const isDir = mnem.startsWith('.') || ['ORG','DB','DW','DS','EQU'].includes(mnem);
+    if (isDir) html += `<span class="t-dir">${esc(mnem)}</span>`;
+    else        html += `<span class="t-mnem">${esc(mnem.padEnd(8))}</span>`;
+    if (operand) html += `<span class="t-operand"> ${esc(operand)}</span>`;
+  }
+
+  if (comment) html += `<span class="t-comment">${html ? ' ' : ''}${esc(comment)}</span>`;
+
+  return html || `<span class="t-comment">${esc(src.raw)}</span>`;
+}
+
+// ══════════════════════════════════════════════════════════
+// RENDER FUNCTIONS
+// ══════════════════════════════════════════════════════════
+function renderListing(result) {
+  const { output, errors } = result;
+  const errSet = new Set(errors.map(e => e.lineNum));
+  const frag = document.createDocumentFragment();
+
+  for (const row of output) {
+    const hasErr = errSet.has(row.lineNum);
+    const div = document.createElement('div');
+    div.className = 'lst-row' + (hasErr ? ' lst-error' : '') + (row.src.label && !row.src.mnem ? ' lst-label-def' : '');
+
+    const addrStr  = row.bytes.length > 0 ? `$${h4(row.addr)}` : '';
+    const bytesStr = row.bytes.map(h2).join(' ');
+    const errMsgs  = errors.filter(e => e.lineNum === row.lineNum);
+
+    div.innerHTML =
+      `<span class="lc-line">${row.lineNum}</span>` +
+      `<span class="lc-addr">${esc(addrStr.padEnd(6))}</span>` +
+      `<span class="lc-bytes">${esc(bytesStr.padEnd(11))}</span>` +
+      `<span class="lc-src">${hlSrc(row.src)}` +
+        (errMsgs.length ? `  <span class="t-error">◀ ${errMsgs.map(e=>esc(e.msg)).join('; ')}</span>` : '') +
+      `</span>`;
+    frag.appendChild(div);
+  }
+
+  const inner = document.getElementById('output-inner');
+  inner.innerHTML = '';
+  inner.appendChild(frag);
+}
+
+function renderHex(result) {
+  const { output } = result;
+  // Collect all bytes in order
+  const allBytes = [];
+  for (const row of output) {
+    for (const b of row.bytes) allBytes.push({ addr: row.addr + allBytes.filter((x,i) => {
+      // recalc relative position
+      return false;
+    }).length, b });
+  }
+
+  // Simpler: flatten to addr→byte map, then render
+  const addrMap = new Map();
+  for (const row of output) {
+    row.bytes.forEach((b, i) => addrMap.set((row.addr + i) & 0xFFFF, b));
+  }
+  if (!addrMap.size) {
+    document.getElementById('output-inner').innerHTML = '<div class="empty-state" style="height:auto;padding:30px">NO BYTES ASSEMBLED</div>';
+    return;
+  }
+
+  const keys = [...addrMap.keys()].sort((a,b)=>a-b);
+  const startAddr = keys[0];
+  const endAddr   = keys[keys.length - 1];
+
+  // Build continuous hex dump, gap-filling with '--' where no data
+  const COLS = 16;
+  let html = '<div class="hex-block">';
+
+  // Compute first row start (align to COLS)
+  const rowStart = Math.floor(startAddr / COLS) * COLS;
+
+  for (let r = rowStart; r <= endAddr; r += COLS) {
+    const rowBytes = [];
+    for (let c = 0; c < COLS; c++) {
+      const a = r + c;
+      rowBytes.push(addrMap.has(a) ? h2(addrMap.get(a)) : '  ');
+    }
+    html += `<span class="hb-addr">$${h4(r)}</span>`;
+    html += `<span class="hb-sep">  </span>`;
+
+    for (let c = 0; c < COLS; c++) {
+      const a = r + c;
+      const filled = addrMap.has(a);
+      if (c === 8) html += `<span class="hb-sep"> </span>`;
+      html += filled
+        ? `<span style="color:var(--accent)">${rowBytes[c]} </span>`
+        : `<span style="color:var(--dim)">-- </span>`;
+    }
+    html += '\n';
+  }
+  html += '</div>';
+
+  // Raw hex string (clean, space-separated)
+  const cleanHex = keys.map(a => h2(addrMap.get(a))).join(' ');
+  html += `<div style="padding:0 20px 16px;font-size:11px;color:var(--muted);letter-spacing:0.5px">`;
+  html += `RAW: <span style="color:var(--accent);word-break:break-all">${cleanHex}</span></div>`;
+
+  document.getElementById('output-inner').innerHTML = html;
+}
+
+function renderSymbols(result) {
+  const { symbols, output } = result;
+  const names = Object.keys(symbols).sort();
+  if (!names.length) {
+    document.getElementById('output-inner').innerHTML = '<div class="empty-state" style="height:auto;padding:30px">NO SYMBOLS DEFINED</div>';
+    return;
+  }
+
+  // Count references per symbol in source
+  const refs = {};
+  names.forEach(n => refs[n] = 0);
+  for (const row of output) {
+    const op = row.src.operand || '';
+    names.forEach(n => { if (op.toUpperCase().includes(n)) refs[n]++; });
+  }
+
+  const frag = document.createDocumentFragment();
+  const hdr = document.createElement('div');
+  hdr.innerHTML = `<div class="sym-row" style="color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:6px;margin-bottom:8px"><span class="sym-name">LABEL</span><span class="sym-val">VALUE</span><span class="sym-refs">REFS</span></div>`;
+  frag.appendChild(hdr);
+
+  for (const n of names) {
+    const div = document.createElement('div');
+    div.className = 'sym-row';
+    div.innerHTML =
+      `<span class="sym-name">${esc(n)}</span>` +
+      `<span class="sym-val">$${h4(symbols[n])}</span>` +
+      `<span class="sym-refs">${refs[n] > 0 ? refs[n]+' ref'+(refs[n]>1?'s':'') : '<span style="color:var(--dim)">—</span>'}</span>`;
+    frag.appendChild(div);
+  }
+
+  const wrap = document.createElement('div');
+  wrap.className = 'sym-table';
+  wrap.appendChild(frag);
+  document.getElementById('output-inner').innerHTML = '';
+  document.getElementById('output-inner').appendChild(wrap);
+}
+
+function renderErrors(result) {
+  const { errors } = result;
+  const inner = document.getElementById('output-inner');
+  if (!errors.length) {
+    inner.innerHTML = '<div class="empty-state" style="height:auto;padding:30px;color:var(--green)">✓ NO ERRORS</div>';
+    return;
+  }
+  const wrap = document.createElement('div');
+  wrap.className = 'err-panel';
+  errors.forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'err-item';
+    div.innerHTML = `<span class="err-loc">LINE ${e.lineNum}</span><span class="err-msg">✗ ${esc(e.msg)}</span>`;
+    wrap.appendChild(div);
+  });
+  inner.innerHTML = '';
+  inner.appendChild(wrap);
+}
+
+function renderTab(result) {
+  document.getElementById('output-scroll').scrollTop = 0;
+  switch(currentTab) {
+    case 'listing': renderListing(result); break;
+    case 'hex':     renderHex(result);     break;
+    case 'symbols': renderSymbols(result); break;
+    case 'errors':  renderErrors(result);  break;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// MAIN ASSEMBLE ACTION
+// ══════════════════════════════════════════════════════════
+function assemble() {
+  const source   = asmInput.value;
+  const orgStr   = document.getElementById('org-addr').value.trim() || '0000';
+  const defaultOrg = parseInt(orgStr, 16) || 0;
+
+  if (!source.trim()) { showIdle(); return; }
+
+  lastResult = assembleSource(source, defaultOrg);
+  const { output, symbols, errors } = lastResult;
+
+  // Update error line numbers for gutter
+  errorLines = new Set(errors.map(e => e.lineNum));
+  updateLineNums();
+
+  // Byte count
+  const totalBytes = output.reduce((s, r) => s + r.bytes.length, 0);
+  const labelCount = Object.keys(symbols).length;
+  const errCount   = errors.length;
+
+  // Status
+  const statusEl = document.getElementById('status');
+  if (errCount > 0) {
+    statusEl.textContent = `⚠ ASSEMBLED WITH ${errCount} ERROR${errCount>1?'S':''}`;
+    statusEl.className = 'status-err';
+  } else {
+    statusEl.textContent = '✓ ASSEMBLY COMPLETE';
+    statusEl.className = 'status-ok';
+  }
+
+  document.getElementById('stat-bytes').textContent  = totalBytes;
+  document.getElementById('stat-labels').textContent = labelCount;
+  document.getElementById('stat-errors').textContent = errCount;
+
+  // Error badge on tab
+  const badge = document.getElementById('err-count-badge');
+  badge.textContent = errCount > 0 ? ` (${errCount})` : '';
+  badge.style.color = errCount > 0 ? 'var(--error)' : '';
+
+  document.getElementById('stats').innerHTML =
+    `<em>${totalBytes}</em> bytes &bull; <em>${labelCount}</em> labels` +
+    (errCount ? ` &bull; <em style="color:var(--error)">${errCount} error${errCount>1?'s':''}</em>` : '');
+
+  renderTab(lastResult);
+
+  // Auto-switch to errors tab if there are errors and we're not already there
+  if (errCount > 0 && currentTab === 'listing') {
+    // stay on listing so user can see inline errors
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// COPY HEX
+// ══════════════════════════════════════════════════════════
+function copyOutput() {
+  if (!lastResult) return;
+  const addrMap = new Map();
+  for (const row of lastResult.output) {
+    row.bytes.forEach((b, i) => addrMap.set((row.addr + i) & 0xFFFF, b));
+  }
+  if (!addrMap.size) return;
+  const keys = [...addrMap.keys()].sort((a,b)=>a-b);
+  const text = keys.map(a => h2(addrMap.get(a))).join(' ');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-btn');
+    const orig = btn.textContent;
+    btn.textContent = 'COPIED!';
+    setTimeout(() => btn.textContent = orig, 1400);
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// CLEAR
+// ══════════════════════════════════════════════════════════
+function showIdle() {
+  document.getElementById('output-inner').innerHTML =
+    `<div class="empty-state"><div class="cpu-art"> ┌──────────────────┐
+ │  SC61860  ASM    │
+ │  TWO-PASS        │
+ │  ASSEMBLER       │
+ └──────────────────┘</div>ENTER SOURCE AND PRESS ASSEMBLE</div>`;
+  document.getElementById('status').textContent = '■ IDLE';
+  document.getElementById('status').className   = 'status-wait';
+  ['stat-bytes','stat-labels','stat-errors'].forEach(id => document.getElementById(id).textContent = '—');
+  document.getElementById('stats').textContent = 'READY';
+  document.getElementById('err-count-badge').textContent = '';
+}
+
+function clearAll() {
+  asmInput.value = '';
+  lastResult = null;
+  errorLines = new Set();
+  updateLineNums();
+  showIdle();
+}
+
+// ══════════════════════════════════════════════════════════
+// SAMPLE PROGRAM
+// ══════════════════════════════════════════════════════════
+function loadSample() {
+  asmInput.value =
+`; ─────────────────────────────────────────────
+; SC61860 Sample Program
+; Adds N numbers stored in memory at DATA_BUF
+; Result in accumulator A
+; ─────────────────────────────────────────────
+
+COUNT   .EQU    $05             ; how many values to sum
+        .ORG    $8000
+
+; ── Entry point ──────────────────────────────
+start:
+        LII     COUNT           ; I = loop count
+        LIDP    DATA_BUF        ; DP → data buffer
+        CLRA                    ; A = 0
+
+sum_loop:
+        LDD                     ; A ← (DP)  [load byte]
+        ADM                     ; (P) += A  [add to mem@P]
+        IX                      ; DP++
+        DECI                    ; I--
+        JRNZP   sum_loop        ; if I≠0 branch forward... wait, need bwd
+        ; (use JRNZM for backward branch to sum_loop)
+
+; ── Actually use backward branch ─────────────
+        LIDP    DATA_BUF        ; reset DP
+        LII     COUNT
+        CLRA
+        LP      $02             ; P = 2  (accumulator address)
+
+loop2:
+        LDD                     ; A ← (DP)
+        ADM                     ; (P) += A
+        IX                      ; DP++
+        DECI                    ; I--
+        JRNZM   loop2           ; if I≠0 branch back to loop2
+
+        LDM                     ; A ← (P)  [final result]
+        CALL    print_result     ; call output routine
+        RTN                     ; return
+
+; ── Print result subroutine ──────────────────
+print_result:
+        OUTA                    ; output A to IA port
+        RTN
+
+; ── Data buffer ──────────────────────────────
+        .ORG    $8100
+DATA_BUF:
+        .DB     $0A, $14, $1E, $28, $32   ; 10,20,30,40,50  (sum=150=$96)
+`;
+  updateLineNums();
+  assemble();
+}
+
+// initial line numbers
+updateLineNums();
+</script>
+</body>
+</html>
