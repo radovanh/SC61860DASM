@@ -254,14 +254,22 @@
   /* Right panel – output */
   #output-scroll {
     flex: 1;
+    overflow-x: auto;
     overflow-y: auto;
     padding: 12px 0;
     background: var(--bg);
     scroll-behavior: smooth;
   }
-  #output-scroll::-webkit-scrollbar { width: 6px; }
+  #output-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
   #output-scroll::-webkit-scrollbar-track { background: var(--bg); }
   #output-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  #output-scroll::-webkit-scrollbar-corner { background: var(--bg); }
+
+  /* inner wrapper expands to widest line — never wraps */
+  #output-inner {
+    display: inline-block;
+    min-width: 100%;
+  }
 
   /* label definition row */
   .label-def {
@@ -269,14 +277,17 @@
     font-size: 12px; color: var(--label);
     text-shadow: var(--glow3); letter-spacing: 0.5px;
     margin-top: 6px; border-left: 2px solid var(--label);
+    white-space: nowrap;
   }
 
-  /* asm line */
+  /* asm line — flex so columns sit side-by-side at natural widths */
   .asm-line {
-    display: grid;
-    grid-template-columns: 74px 86px 98px 1fr;
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
     padding: 2px 18px;
     font-size: 13px; line-height: 1.75;
+    white-space: nowrap;
     transition: background 0.1s;
     border-left: 2px solid transparent;
   }
@@ -284,12 +295,12 @@
   .asm-line.error-line  { border-left-color: var(--error); background: rgba(255,68,68,0.05); }
   .asm-line.jump-target { border-left-color: var(--label); }
 
-  .col-addr    { color: var(--addr); }
-  .col-hex     { color: var(--hex); letter-spacing: 0.5px; }
-  .col-mnem    { color: var(--mnem); font-weight: bold; }
-  .col-operand { color: var(--operand); }
-  .col-label   { color: var(--label); text-shadow: var(--glow3); }
-  .col-comment { color: var(--comment); font-size: 11px; }
+  .col-addr    { color: var(--addr);    width: 56px;  flex-shrink: 0; }
+  .col-hex     { color: var(--hex);     width: 80px;  flex-shrink: 0; letter-spacing: 0.5px; }
+  .col-mnem    { color: var(--mnem);    width: 72px;  flex-shrink: 0; font-weight: bold; }
+  .col-operand { color: var(--operand); width: 120px; flex-shrink: 0; }
+  .col-label   { color: var(--label);   width: 120px; flex-shrink: 0; text-shadow: var(--glow3); }
+  .col-comment { color: var(--comment); font-size: 11px; flex-shrink: 0; }
 
   .error-msg { color: var(--error); padding: 20px; font-size: 13px; }
 
@@ -337,7 +348,7 @@
       );
     }
     #pane-right { flex: 1; min-height: 200px; }
-    .asm-line { grid-template-columns: 64px 74px 88px 1fr; font-size: 12px; padding: 2px 10px; }
+    .asm-line { font-size: 12px; padding: 2px 10px; }
     header { padding: 12px 14px; }
     .controls { padding: 8px 14px; }
     footer { padding: 7px 14px; gap: 14px; }
@@ -411,6 +422,7 @@
       DISASSEMBLY OUTPUT
     </div>
     <div id="output-scroll">
+      <div id="output-inner">
       <div class="empty-state">
         <div class="cpu-art">╔══════════════════╗
 ║  SC61860 / ESR-H ║
@@ -419,6 +431,7 @@
 ╚══════════════════╝</div>
         ENTER HEX BYTES AND PRESS DISASSEMBLE
       </div>
+      </div><!-- /output-inner -->
     </div>
   </div>
 
@@ -771,7 +784,8 @@ function disassemble() {
 
 function renderOutput(lines, org, byteCount, labelMap) {
   const scroll = document.getElementById('output-scroll');
-  scroll.innerHTML='';
+  const inner  = document.getElementById('output-inner');
+  inner.innerHTML='';
   const frag=document.createDocumentFragment();
   let errCount=0;
 
@@ -810,7 +824,7 @@ function renderOutput(lines, org, byteCount, labelMap) {
       `<span class="col-comment">&nbsp;&nbsp;; ${esc(dispComment)}</span>`;
     frag.appendChild(div);
   }
-  scroll.appendChild(frag);
+  inner.appendChild(frag);
 
   const endAddr=org+byteCount-1;
   document.getElementById('stat-instr').textContent=lines.length;
@@ -828,7 +842,7 @@ function renderOutput(lines, org, byteCount, labelMap) {
 }
 
 function showError(msg) {
-  document.getElementById('output-scroll').innerHTML=`<div class="error-msg">! ${msg}</div>`;
+  document.getElementById('output-inner').innerHTML=`<div class="error-msg">! ${msg}</div>`;
   document.getElementById('status').textContent='✗ '+msg;
   document.getElementById('status').className='status-err';
 }
@@ -838,7 +852,7 @@ function showError(msg) {
 // ══════════════════════════════════════════════════════════
 function clearAll() {
   document.getElementById('hex-input').value='';
-  document.getElementById('output-scroll').innerHTML=
+  document.getElementById('output-inner').innerHTML=
     `<div class="empty-state"><div class="cpu-art">╔══════════════════╗
 ║  SC61860 / ESR-H ║
 ║   8-BIT CPU      ║
@@ -851,7 +865,7 @@ function clearAll() {
 }
 
 function copyOutput() {
-  const rows=document.getElementById('output-scroll').querySelectorAll('.asm-line, .label-def');
+  const rows=document.getElementById('output-inner').querySelectorAll('.asm-line, .label-def');
   if (!rows.length) return;
   const text=Array.from(rows).map(r=>{
     if (r.classList.contains('label-def')) return r.textContent.trim();
