@@ -524,11 +524,16 @@ function evalExpr(str, symbols, currentAddr) {
   // Replace %BBBB binary literals
   str = str.replace(/%([01]+)/g, (_, b) => parseInt(b, 2));
 
+  // Uppercase the working string so label lookup is case-insensitive.
+  // We only uppercase the portion that hasn't been replaced by numeric literals yet;
+  // since $xx and %bb have already been turned into plain digits, uppercasing is safe.
+  str = str.toUpperCase();
+
   // Replace label names (must come after $ and % substitutions)
   // Sort by length descending to avoid partial matches
   const labelNames = Object.keys(symbols).sort((a, b) => b.length - a.length);
   for (const lbl of labelNames) {
-    // Only replace whole-word occurrences
+    // Only replace whole-word occurrences (symbols are already uppercase)
     const re = new RegExp('(?<![A-Za-z0-9_])' + lbl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z0-9_])', 'g');
     str = str.replace(re, symbols[lbl]);
   }
@@ -552,8 +557,12 @@ function evalExpr(str, symbols, currentAddr) {
 // TOKENIZER / LINE PARSER
 // Returns { label, mnem, operand, comment, raw }
 // ══════════════════════════════════════════════════════════
+
+// Directives that allow a label without a colon (e.g. COUNT .EQU $05)
+const EQU_WORDS = new Set(['.EQU', 'EQU']);
+
 function parseLine(line) {
-  let raw = line;
+  const raw = line;
   // strip comment
   let comment = '';
   const ci = line.indexOf(';');
@@ -564,12 +573,21 @@ function parseLine(line) {
 
   if (!line) return { label, mnem, operand, comment, raw };
 
-  // Label: starts at column 0 (no leading whitespace before it) and ends with ':'
-  // OR the whole token before any whitespace ends with ':'
-  const labelMatch = line.match(/^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)/);
-  if (labelMatch) {
-    label = labelMatch[1].toUpperCase();
-    line  = labelMatch[2].trim();
+  // ── Standard label with colon:  label: [mnem [operand]]
+  const colonMatch = line.match(/^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)/);
+  if (colonMatch) {
+    label = colonMatch[1].toUpperCase();
+    line  = colonMatch[2].trim();
+  } else {
+    // ── Label without colon – only legal for EQU:  COUNT  .EQU  $05
+    // Detect: first token is an identifier, second token is EQU or .EQU
+    const equMatch = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s+(\S+)\s*(.*)/);
+    if (equMatch && EQU_WORDS.has(equMatch[2].toUpperCase())) {
+      label   = equMatch[1].toUpperCase();
+      mnem    = equMatch[2].toUpperCase();
+      operand = equMatch[3].trim() || null;
+      return { label, mnem, operand, comment, raw };
+    }
   }
 
   if (!line) return { label, mnem, operand, comment, raw };
@@ -1145,55 +1163,42 @@ function clearAll() {
 // ══════════════════════════════════════════════════════════
 function loadSample() {
   asmInput.value =
-`; ─────────────────────────────────────────────
-; SC61860 Sample Program
-; Adds N numbers stored in memory at DATA_BUF
-; Result in accumulator A
-; ─────────────────────────────────────────────
+`; ─────────────────────────────────────────────────────
+; SC61860 Sample — sum N bytes, output via IA port
+; ─────────────────────────────────────────────────────
+COUNT   .EQU    $05             ; number of values to sum
 
-COUNT   .EQU    $05             ; how many values to sum
         .ORG    $8000
 
-; ── Entry point ──────────────────────────────
+; ── Entry point ───────────────────────────────────────
 start:
-        LII     COUNT           ; I = loop count
-        LIDP    DATA_BUF        ; DP → data buffer
-        CLRA                    ; A = 0
+        LII     COUNT           ; I = loop counter
+        LIDP    DATA_BUF        ; DP → data buffer start
+        LP      $02             ; P = 2 (register A location)
+        CLRA                    ; A = 0, clear accumulator
 
+; ── Summation loop (backward branch) ──────────────────
 sum_loop:
-        LDD                     ; A ← (DP)  [load byte]
-        ADM                     ; (P) += A  [add to mem@P]
-        IX                      ; DP++
-        DECI                    ; I--
-        JRNZP   sum_loop        ; if I≠0 branch forward... wait, need bwd
-        ; (use JRNZM for backward branch to sum_loop)
-
-; ── Actually use backward branch ─────────────
-        LIDP    DATA_BUF        ; reset DP
-        LII     COUNT
-        CLRA
-        LP      $02             ; P = 2  (accumulator address)
-
-loop2:
         LDD                     ; A ← (DP)
-        ADM                     ; (P) += A
+        ADM                     ; (P) += A  [accumulate]
         IX                      ; DP++
         DECI                    ; I--
-        JRNZM   loop2           ; if I≠0 branch back to loop2
+        JRNZM   sum_loop        ; if I≠0 branch back to sum_loop
 
-        LDM                     ; A ← (P)  [final result]
-        CALL    print_result     ; call output routine
-        RTN                     ; return
+; ── Output result ─────────────────────────────────────
+        LDM                     ; A ← (P)  [load result]
+        CALL    print_result    ; display it
+        RTN                     ; return to caller
 
-; ── Print result subroutine ──────────────────
+; ── Print subroutine ──────────────────────────────────
 print_result:
-        OUTA                    ; output A to IA port
+        OUTA                    ; A → IA output port
         RTN
 
-; ── Data buffer ──────────────────────────────
+; ── Data ──────────────────────────────────────────────
         .ORG    $8100
 DATA_BUF:
-        .DB     $0A, $14, $1E, $28, $32   ; 10,20,30,40,50  (sum=150=$96)
+        .DB     $0A,$14,$1E,$28,$32  ; 10+20+30+40+50 = 150 ($96)
 `;
   updateLineNums();
   assemble();
