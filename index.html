@@ -265,10 +265,6 @@
 
 <nav>
   <a class="nav-logo" href="index.html">SC<span>61860</span></a>
-  <div class="nav-links">
-    <a href="sc61860-disassembler.html">Disassembler</a>
-    <a href="https://github.com/utz82/SC61860-Instruction-Set" target="_blank">ISA Reference</a>
-  </div>
 </nav>
 
 <section class="hero">
@@ -321,17 +317,19 @@
       <div class="card-arrow">OPEN TOOL &rarr;</div>
     </a>
 
-    <!-- HEX VIEWER (coming soon) -->
-    <div class="card coming-soon">
-      <div class="card-icon green">HEX</div>
-      <h2>Hex Viewer</h2>
-      <p>Inspect binary ROM dumps with a classic hex/ASCII layout. Jump to offsets, highlight regions, and export selections.</p>
+    <!-- ISA REFERENCE -->
+    <a class="card" href="sc61860-reference.html">
+      <div class="card-icon purple">REF</div>
+      <h2>ISA Reference</h2>
+      <p>Complete self-hosted instruction set reference for the SC61860. Every opcode, flag, clock cycle, register, and addressing mode in one searchable page. Includes architecture notes, the LOOP and PTC/DTC usage guides, and the full register map.</p>
       <div class="card-tags">
-        <span class="tag">ROM DUMP</span>
-        <span class="tag">SEARCH</span>
+        <span class="tag">ALL OPCODES</span>
+        <span class="tag">REGISTERS</span>
+        <span class="tag">SEARCHABLE</span>
+        <span class="tag">OFFLINE</span>
       </div>
-      <div class="badge-cs">COMING SOON</div>
-    </div>
+      <div class="card-arrow">OPEN REFERENCE &rarr;</div>
+    </a>
 
   </div>
 </section>
@@ -386,7 +384,9 @@
   <span>SC61860 DEVELOPER TOOLS</span>
   <span>
     ISA REFERENCE:
-    <a href="https://github.com/utz82/SC61860-Instruction-Set" target="_blank">UTZ82/SC61860-INSTRUCTION-SET</a>
+    <a href="sc61860-reference.html">SC61860-REFERENCE</a>
+    &bull;
+    SOURCE: <a href="https://github.com/utz82/SC61860-Instruction-Set" target="_blank">UTZ82/SC61860-INSTRUCTION-SET</a> (CC0-1.0)
   </span>
 </footer>
 

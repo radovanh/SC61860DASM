@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC61860 Instruction Set Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0a0c10;
+    --panel:   #0f1319;
+    --panel2:  #121820;
+    --border:  #1e2d3d;
+    --border2: #243448;
+    --accent:  #00e5ff;
+    --accent2: #ff6b35;
+    --green:   #39ff14;
+    --purple:  #c792ea;
+    --yellow:  #e8d87a;
+    --dim:     #3a4a5a;
+    --text:    #c8d8e8;
+    --muted:   #5a7a8a;
+    --error:   #ff4444;
+    --glow:    0 0 8px rgba(0,229,255,0.35);
+    --glow2:   0 0 6px rgba(57,255,20,0.3);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.09) 2px, rgba(0,0,0,0.09) 4px);
+    pointer-events: none; z-index: 9999;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    border-bottom: 1px solid var(--border);
+    padding: 13px 32px;
+    display: flex; align-items: center; gap: 16px;
+    background: rgba(10,12,16,0.96);
+    backdrop-filter: blur(10px);
+  }
+  nav::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.35;
+  }
+  .nav-logo {
+    font-family: 'Orbitron', monospace; font-weight: 900; font-size: 16px;
+    color: var(--accent); text-shadow: var(--glow); letter-spacing: 2px;
+    text-decoration: none; white-space: nowrap;
+  }
+  .nav-logo span { color: var(--accent2); }
+  .nav-title {
+    font-size: 11px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase;
+  }
+  .nav-back {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    color: var(--muted); text-decoration: none; letter-spacing: 1px;
+    border: 1px solid var(--dim); padding: 5px 12px; border-radius: 2px; transition: all 0.2s;
+  }
+  .nav-back:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* search */
+  .nav-search-wrap { margin-left: auto; position: relative; }
+  #search-input {
+    background: var(--panel); border: 1px solid var(--border);
+    color: var(--accent); font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; padding: 5px 10px 5px 28px;
+    border-radius: 2px; outline: none; width: 200px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  #search-input:focus { border-color: var(--accent); box-shadow: var(--glow); }
+  #search-input::placeholder { color: var(--dim); }
+  .search-icon {
+    position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+    font-size: 11px; color: var(--muted); pointer-events: none;
+  }
+
+  /* ── LAYOUT ── */
+  .page { display: flex; min-height: calc(100vh - 50px); }
+
+  /* sidebar TOC */
+  .sidebar {
+    width: 220px; flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    padding: 24px 0;
+    position: sticky; top: 50px; height: calc(100vh - 50px);
+    overflow-y: auto; background: var(--panel);
+  }
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .toc-label {
+    font-size: 10px; color: var(--muted); letter-spacing: 2px;
+    text-transform: uppercase; padding: 0 18px 10px;
+  }
+  .toc-link {
+    display: block; padding: 5px 18px; font-size: 11px; color: var(--muted);
+    text-decoration: none; letter-spacing: 0.5px;
+    border-left: 2px solid transparent; transition: all 0.15s;
+  }
+  .toc-link:hover { color: var(--accent); border-left-color: var(--accent); background: rgba(0,229,255,0.04); }
+  .toc-link.active { color: var(--accent); border-left-color: var(--accent); }
+  .toc-divider { height: 1px; background: var(--border); margin: 10px 18px; }
+
+  /* ── CONTENT ── */
+  .content {
+    flex: 1; min-width: 0;
+    padding: 40px 48px 80px;
+    max-width: 1100px;
+  }
+
+  h1 {
+    font-family: 'Orbitron', monospace; font-weight: 900;
+    font-size: 28px; color: var(--accent); text-shadow: var(--glow);
+    letter-spacing: 2px; margin-bottom: 8px;
+  }
+  h1 span { color: var(--accent2); }
+  .page-sub { font-size: 12px; color: var(--muted); letter-spacing: 1px; margin-bottom: 40px; }
+
+  h2 {
+    font-family: 'Orbitron', monospace; font-weight: 700;
+    font-size: 14px; color: var(--accent2); letter-spacing: 2px;
+    text-transform: uppercase; margin: 44px 0 16px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    scroll-margin-top: 70px;
+  }
+  h3 {
+    font-family: 'Orbitron', monospace; font-weight: 700;
+    font-size: 11px; color: var(--yellow); letter-spacing: 2px;
+    text-transform: uppercase; margin: 28px 0 12px;
+    scroll-margin-top: 70px;
+  }
+
+  p { font-size: 13px; color: var(--text); line-height: 1.8; margin-bottom: 14px; }
+  p a { color: var(--accent); text-decoration: none; }
+  p a:hover { text-decoration: underline; }
+
+  ul { margin: 0 0 14px 0; padding: 0; list-style: none; }
+  ul li { font-size: 13px; color: var(--text); line-height: 1.8; padding-left: 16px; position: relative; }
+  ul li::before { content: '▸'; position: absolute; left: 0; color: var(--accent2); font-size: 10px; top: 3px; }
+
+  code {
+    font-family: 'Share Tech Mono', monospace; font-size: 12px;
+    color: var(--yellow); background: rgba(232,216,122,0.08);
+    padding: 1px 5px; border-radius: 2px;
+  }
+
+  pre {
+    background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 3px; padding: 16px 20px; margin: 16px 0;
+    overflow-x: auto; font-size: 12px; line-height: 1.7;
+    color: var(--green);
+  }
+  pre::-webkit-scrollbar { height: 4px; }
+  pre::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* footnotes */
+  .footnote { font-size: 11px; color: var(--muted); line-height: 1.7; margin-top: 12px; }
+  .footnote sup { color: var(--yellow); }
+
+  /* unknown opcodes box */
+  .opcode-box {
+    background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 3px; padding: 14px 18px; margin: 12px 0;
+    font-size: 13px; color: var(--error); letter-spacing: 1px; line-height: 1.8;
+  }
+
+  /* ── INSTRUCTION TABLE ── */
+  .table-wrap { overflow-x: auto; margin: 0 0 16px; }
+  .table-wrap::-webkit-scrollbar { height: 5px; }
+  .table-wrap::-webkit-scrollbar-track { background: var(--bg); }
+  .table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  table {
+    border-collapse: collapse; font-size: 12px;
+    width: 100%; min-width: 700px;
+  }
+  thead th {
+    background: var(--panel); color: var(--muted);
+    font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 8px 12px; border-bottom: 2px solid var(--border2);
+    text-align: left; white-space: nowrap; font-weight: normal;
+  }
+  tbody tr { border-bottom: 1px solid rgba(30,45,61,0.6); transition: background 0.1s; }
+  tbody tr:hover { background: rgba(0,229,255,0.03); }
+  tbody tr.alias-row { opacity: 0.55; font-style: italic; }
+  tbody tr.alias-row:hover { opacity: 0.8; }
+  tbody td { padding: 5px 12px; vertical-align: middle; white-space: nowrap; }
+
+  .td-mnem { color: var(--green); font-weight: bold; font-size: 13px; }
+  .td-mnem.undoc { color: var(--purple); }
+  .td-mnem.alias { color: var(--muted); font-style: italic; }
+  .td-size { color: var(--accent2); text-align: center; }
+  .td-opcode { color: var(--accent); font-family: 'Share Tech Mono', monospace; }
+  .td-clocks { color: var(--yellow); text-align: center; }
+  .td-flags { color: var(--purple); text-align: center; letter-spacing: 1px; }
+  .td-effect { color: var(--text); font-size: 11px; }
+  .td-effect code { font-size: 11px; }
+  .td-remarks { color: var(--muted); font-size: 11px; }
+  .badge-undoc {
+    display: inline-block; font-size: 9px; color: var(--purple);
+    border: 1px solid rgba(199,146,234,0.4); padding: 1px 5px; border-radius: 1px;
+    letter-spacing: 0.5px; vertical-align: middle; margin-left: 4px;
+  }
+
+  /* search highlight */
+  .highlight { background: rgba(255,107,53,0.25); border-radius: 2px; }
+  tr.hidden { display: none; }
+
+  /* register table */
+  .reg-table { min-width: 500px; }
+  .td-reg-name { color: var(--accent); font-weight: bold; font-size: 13px; }
+  .td-reg-loc  { color: var(--accent2); }
+  .td-reg-fn   { color: var(--text); }
+  .td-reg-note { color: var(--muted); font-size: 11px; }
+
+  /* ── SOURCE CREDIT ── */
+  .credit {
+    margin-top: 60px; padding: 18px 24px;
+    border: 1px solid var(--border); border-radius: 3px;
+    background: var(--panel2); font-size: 11px; color: var(--muted); line-height: 1.8;
+  }
+  .credit a { color: var(--accent); text-decoration: none; }
+  .credit a:hover { text-decoration: underline; }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border); padding: 14px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px; color: var(--dim); background: var(--panel); flex-wrap: wrap; gap: 8px;
+  }
+
+  @media (max-width: 900px) {
+    .sidebar { display: none; }
+    .content { padding: 24px 18px 60px; }
+    h1 { font-size: 22px; }
+  }
+  @media (max-width: 600px) {
+    nav { padding: 12px 16px; }
+    #search-input { width: 140px; }
+    .nav-title { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="index.html">SC<span>61860</span></a>
+  <span class="nav-title">INSTRUCTION SET REFERENCE</span>
+  <a class="nav-back" href="index.html">&#8592; INDEX</a>
+  <div class="nav-search-wrap">
+    <span class="search-icon">⌕</span>
+    <input type="text" id="search-input" placeholder="Search mnemonic…" oninput="searchTable(this.value)">
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- SIDEBAR TOC -->
+  <nav class="sidebar">
+    <div class="toc-label">Contents</div>
+    <a class="toc-link" href="#about">About</a>
+    <a class="toc-link" href="#architecture">Architecture</a>
+    <a class="toc-link" href="#registers">Registers</a>
+    <div class="toc-divider"></div>
+    <a class="toc-link" href="#instruction-set">Instruction Set</a>
+    <a class="toc-link" href="#unknown-opcodes">Unknown Opcodes</a>
+    <div class="toc-divider"></div>
+    <a class="toc-link" href="#using-loop">Using LOOP</a>
+    <a class="toc-link" href="#using-ptc-dtc">Using PTC/DTC</a>
+    <div class="toc-divider"></div>
+    <a class="toc-link" href="#sources">Sources</a>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <div class="content">
+
+    <h1>SC<span>61860</span> — ESR-H Instruction Set</h1>
+    <div class="page-sub">HITACHI SC61860 &bull; 8-BIT CPU &bull; USED IN SHARP PC-12xx / 13xx / 14xx</div>
+
+    <!-- ── ABOUT ── -->
+    <h2 id="about">About</h2>
+    <p>The SC61860 is an 8-bit CPU developed by Hitachi, using the ESR-H architecture. Its most prominent use was in various pocket computers and organizers produced by Sharp in the 1980s, notably the PC-12xx, PC-13xx, and PC-14xx series.</p>
+    <p>Despite its age, various details about this CPU remain shrouded by obscurity. The original instruction set documentation is based on community research compiled by <a href="https://github.com/utz82/SC61860-Instruction-Set" target="_blank">utz82</a>, published under the CC0-1.0 license.</p>
+
+    <!-- ── ARCHITECTURE ── -->
+    <h2 id="architecture">Architecture</h2>
+    <ul>
+      <li>Big-endian 16-bit address encoding in instructions</li>
+      <li>No interrupts</li>
+      <li>8-bit data bus</li>
+      <li>64 KB address space</li>
+      <li>8 KB of integrated ROM at <code>0x0000–0x1FFF</code>, accessible only via the <code>DATA</code> instruction</li>
+      <li>96 bytes of scratchpad memory (internal RAM) — used for registers, stack, I/O, and BCD calculations</li>
+    </ul>
+    <p>The system stack starts at internal RAM address <code>0x5B</code> and grows downwards towards <code>0x0C</code>. The I/O ports IA, IB, and F0 are mapped to internal RAM addresses <code>0x5B–0x5E</code>.</p>
+    <p>Internal RAM registers <code>0x30–0x3F</code> are used by the system and BASIC interpreter — these should not be modified.</p>
+    <p>All numeric values in this reference are hexadecimal unless stated otherwise.</p>
+
+    <!-- ── REGISTERS ── -->
+    <h2 id="registers">Registers</h2>
+    <div class="table-wrap">
+      <table class="reg-table">
+        <thead>
+          <tr>
+            <th>Name</th><th>Int. RAM Addr</th><th>Function</th><th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="td-reg-name">A</td><td class="td-reg-loc">0x02</td><td class="td-reg-fn">Accumulator</td><td class="td-reg-note"></td></tr>
+          <tr><td class="td-reg-name">B</td><td class="td-reg-loc">0x03</td><td class="td-reg-fn">Secondary Accumulator</td><td class="td-reg-note"></td></tr>
+          <tr><td class="td-reg-name">I</td><td class="td-reg-loc">0x00</td><td class="td-reg-fn">Index / Counter</td><td class="td-reg-note"></td></tr>
+          <tr><td class="td-reg-name">J</td><td class="td-reg-loc">0x01</td><td class="td-reg-fn">Index / Counter</td><td class="td-reg-note"></td></tr>
+          <tr><td class="td-reg-name">H <sup>¹</sup></td><td class="td-reg-loc">n/a</td><td class="td-reg-fn">Internal Aux. Register</td><td class="td-reg-note">undocumented</td></tr>
+          <tr><td class="td-reg-name">K</td><td class="td-reg-loc">0x08</td><td class="td-reg-fn">General Purpose / Counter</td><td class="td-reg-note"></td></tr>
+          <tr><td class="td-reg-name">L</td><td class="td-reg-loc">0x09</td><td class="td-reg-fn">General Purpose / Counter</td><td class="td-reg-note"></td></tr>
+          <tr><td class="td-reg-name">M <sup>¹</sup></td><td class="td-reg-loc">0x0A</td><td class="td-reg-fn">General Purpose / Counter</td><td class="td-reg-note">aka V</td></tr>
+          <tr><td class="td-reg-name">N <sup>¹</sup></td><td class="td-reg-loc">0x0B</td><td class="td-reg-fn">General Purpose / Counter</td><td class="td-reg-note">aka W</td></tr>
+          <tr><td class="td-reg-name">P <sup>²</sup></td><td class="td-reg-loc">n/a</td><td class="td-reg-fn">Internal RAM pointer</td><td class="td-reg-note"></td></tr>
+          <tr><td class="td-reg-name">Q <sup>²</sup></td><td class="td-reg-loc">n/a</td><td class="td-reg-fn">Internal RAM pointer</td><td class="td-reg-note"></td></tr>
+          <tr><td class="td-reg-name">R <sup>²</sup></td><td class="td-reg-loc">n/a</td><td class="td-reg-fn">Stack pointer</td><td class="td-reg-note"></td></tr>
+          <tr><td class="td-reg-name">S <sup>¹</sup></td><td class="td-reg-loc">n/a</td><td class="td-reg-fn">—</td><td class="td-reg-note">unused</td></tr>
+          <tr><td class="td-reg-name">X</td><td class="td-reg-loc">0x04–0x05</td><td class="td-reg-fn">16-bit RAM pointer</td><td class="td-reg-note">Xh=0x05, Xl=0x04</td></tr>
+          <tr><td class="td-reg-name">Y</td><td class="td-reg-loc">0x06–0x07</td><td class="td-reg-fn">16-bit RAM pointer</td><td class="td-reg-note">Yh=0x07, Yl=0x06</td></tr>
+          <tr><td colspan="4" style="padding:4px 0;background:transparent;border:none"></td></tr>
+          <tr><td class="td-reg-name">DP</td><td class="td-reg-loc">n/a</td><td class="td-reg-fn">16-bit Data pointer</td><td class="td-reg-note"></td></tr>
+          <tr><td class="td-reg-name">PC</td><td class="td-reg-loc">n/a</td><td class="td-reg-fn">16-bit Program counter</td><td class="td-reg-note"></td></tr>
+          <tr><td colspan="4" style="padding:4px 0;background:transparent;border:none"></td></tr>
+          <tr><td class="td-reg-name">OP1</td><td class="td-reg-loc">0x10–0x17</td><td class="td-reg-fn">Internal BCD adjust register</td><td class="td-reg-note">aka Xreg</td></tr>
+          <tr><td class="td-reg-name">OP2</td><td class="td-reg-loc">0x18–0x1F</td><td class="td-reg-fn">Internal BCD adjust register</td><td class="td-reg-note">aka Yreg</td></tr>
+          <tr><td class="td-reg-name">OP3</td><td class="td-reg-loc">0x20–0x27</td><td class="td-reg-fn">Internal BCD adjust register</td><td class="td-reg-note">aka Zreg</td></tr>
+          <tr><td class="td-reg-name">OP4</td><td class="td-reg-loc">0x28–0x2F</td><td class="td-reg-fn">Internal BCD adjust register</td><td class="td-reg-note">aka Wreg</td></tr>
+          <tr><td colspan="4" style="padding:4px 0;background:transparent;border:none"></td></tr>
+          <tr><td class="td-reg-name">c</td><td class="td-reg-loc"></td><td class="td-reg-fn">Carry flag</td><td class="td-reg-note"></td></tr>
+          <tr><td class="td-reg-name">d</td><td class="td-reg-loc"></td><td class="td-reg-fn">Internal counter</td><td class="td-reg-note">pseudo register</td></tr>
+          <tr><td class="td-reg-name">z</td><td class="td-reg-loc"></td><td class="td-reg-fn">Zero flag</td><td class="td-reg-note"></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="footnote">
+      <sup>¹</sup> Undocumented register. &nbsp;
+      <sup>²</sup> P, Q, and R are treated as 7-bit internally but readable/writable as 8-bit from the data bus.
+    </div>
+
+    <!-- ── INSTRUCTION SET ── -->
+    <h2 id="instruction-set">Instruction Set</h2>
+    <p>Column key — <strong>cz</strong>: flags affected (<code>c</code>=carry, <code>z</code>=zero, <code>.</code>=unaffected); <strong>Size</strong>: total instruction bytes; <strong>Clock</strong>: machine cycles (branch taken / not taken where two values given).</p>
+
+    <div class="table-wrap">
+      <table id="isa-table">
+        <thead>
+          <tr>
+            <th>Mnemonic</th>
+            <th>Size</th>
+            <th>Opcode</th>
+            <th>Clock¹</th>
+            <th>cz</th>
+            <th>Effect</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody id="isa-tbody">
+<!-- rows injected by JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <div class="footnote">
+      <sup>¹</sup> Where two numbers are given, the first is cycles for branch taken, the second for branch not taken.<br>
+      <sup>²</sup> Undocumented instruction. May not work as intended on all SC61860 versions.<br>
+      <sup>³</sup> On PC-1245, HALT initiates an infinite test cycle reading through the full address space — dramatically increasing power consumption.
+    </div>
+
+    <!-- ── UNKNOWN OPCODES ── -->
+    <h2 id="unknown-opcodes">Unknown Opcodes</h2>
+    <p>The following opcodes are undocumented and their effect is unknown:</p>
+    <div class="opcode-box">16, 17, 2E, 36, 3C, 3D, 3E, 3F, 5C, 5E, 6C, 6D, 6E, CF, DC, DE</div>
+
+    <!-- ── USING LOOP ── -->
+    <h2 id="using-loop">Using the LOOP Instruction</h2>
+    <p>The <code>LOOP</code> instruction allows execution of conditional loops without consuming a general-purpose register. It is also 1 cycle faster than the equivalent <code>DECr</code> + <code>JRNZM</code> pattern.</p>
+    <pre>        LIA     n       ; n = [number of iterations] - 1
+        PUSH            ; store counter in (R)
+lloop:
+        ...             ; loop body
+        LOOP    lloop   ; (R)-1→(R), branch back if carry≠0</pre>
+    <p>The loop can be broken early by executing <code>LEAVE</code>, which sets <code>(R)</code> to 0.</p>
+
+    <!-- ── USING PTC/DTC ── -->
+    <h2 id="using-ptc-dtc">Using PTC / DTC (Switch-Case)</h2>
+    <p>The <code>PTC</code>/<code>DTC</code> instruction pair (also known as CASE1/CASE2, PTJ/DTJ, CPCAL/DTLRA, SETT/JST) implements hardware switch-case. Despite its common name "Prepare/Do Table Jump", it does not jump — it pushes a return address and then <em>calls</em> a subroutine.</p>
+    <p>Handling varies between assemblers. In most, the arguments are <code>.db</code>/<code>.dw</code> data statements following the opcode:</p>
+    <pre>        PTC
+        .db     k       ; k = number of cases
+        .dw     nm      ; nm = return address after all subroutines
+
+        DTC
+        .db     n       ; n = condition value matched against A
+        .dw     nm      ; nm = call address for this case
+        ...             ; repeat k times
+        .dw     nm      ; nm = default/fallthrough call address</pre>
+
+    <!-- ── SOURCES ── -->
+    <h2 id="sources">Sources</h2>
+    <ul>
+      <li><a href="https://web.archive.org/web/20090910193610/http://www.thimet.de/CalcCollection/Calculators/Sharp-PC-1403/Machine-Language/Machine-Language.html" target="_blank">Sharp PC-1403 Machine Language (archive)</a></li>
+      <li><a href="https://web.archive.org/web/20080927034636/http://www.lehmayr.de/PC-1360/e_Manuals/ml.htm" target="_blank">PC-1360 Machine Language Manual (archive)</a></li>
+      <li><a href="http://shop-pdp.kent.edu/ashtml/as6186.htm" target="_blank">AS6186 Assembler Documentation</a></li>
+      <li><a href="https://github.com/pockemul/PockEmul/blob/master/src/cpu/sc61860.cpp" target="_blank">PockEmul SC61860 emulator source</a></li>
+      <li><a href="https://github.com/mamedev/mame/tree/master/src/devices/cpu/sc61860" target="_blank">MAME SC61860 CPU core</a></li>
+    </ul>
+
+    <div class="credit">
+      Instruction set data sourced from <a href="https://github.com/utz82/SC61860-Instruction-Set" target="_blank">utz82/SC61860-Instruction-Set</a>,
+      published under the <strong>CC0-1.0</strong> public domain license.
+      Special thanks to <strong>Torsten Mücker</strong> for in-depth research on the ESR-H architecture.
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /page -->
+
+<footer>
+  <span>SC61860 INSTRUCTION SET REFERENCE</span>
+  <span>SOURCE: <a href="https://github.com/utz82/SC61860-Instruction-Set" target="_blank">UTZ82/SC61860-INSTRUCTION-SET</a> — CC0-1.0</span>
+</footer>
+
+<script>
+// ── INSTRUCTION DATA ──────────────────────────────────────────────────────────
+// [mnemonic, size, opcode, clocks, cz, effect, remarks, isUndoc, isAlias]
+const ISA = [
+  ['ADB',     1, '14',       '5',      'cz', '(P)+A→(P), (P+1)+B+c→(P+1), P+1→P', '', false, false],
+  ['ADCM',    1, 'C4',       '3',      'cz', '(P)+A+c→(P)', '', false, false],
+  ['ADIA n',  2, '74 XX',    '4',      'cz', 'A+n→A', '', false, false],
+  ['ADIM n',  2, '70 XX',    '4',      'cz', '(P)+n→(P)', '', false, false],
+  ['ADM',     1, '44',       '3',      'cz', '(P)+A→(P)', '', false, false],
+  ['ADN',     1, '0C',       '7+3·I',  'cz', '(P)+A→(P)..(P-I)+c→(P-I), P-I-1→P, BCD', '', false, false],
+  ['ADW',     1, '0E',       '7+3·I',  'cz', '(P)+(Q)→(P)..(P-I)+(Q-I)+c→(P-I), P-I-1→P, Q-I-2→Q, BCD', '', false, false],
+  ['ANIA n',  2, '64 XX',    '4',      '.z', 'A&n→A', '', false, false],
+  ['ANID n',  2, 'D4 XX',    '6',      '.z', '(DP)&n→(DP), (DP)→(R-1)', '(R-1) used', false, false],
+  ['ANIM n',  2, '60 XX',    '4',      '.z', '(P)&n→(P)', '', false, false],
+  ['ANMA',    1, '46',       '3',      '.z', '(P)&A→(P)', '', false, false],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['CAL nm',  2, 'E0+n XX',  '7',      '..', 'PC+2→(R-1,R-2), R-2→R, nm→PC', 'n≤0x1F', false, false],
+  ['CALL nm', 3, '78 XX XX', '8',      '..', 'PC+3→(R-1,R-2), R-2→R, nm→PC', '', false, false],
+  ['CASE1 → PTC', 0, '', '', '', '', '', false, true],
+  ['CASE2 → DTC', 0, '', '', '', '', '', false, true],
+  ['CDN',     1, '6F',       '1+4·I',  '.z', 'I→d, REPEAT d-1→d, P+1→P UNTIL I=FF‖Xin=0', '', false, false],
+  ['CLRA',    1, '23',       '2',      '..', '0→A, 0→H', '= LDS', false, false],
+  ['CPIA n',  2, '67 XX',    '4',      'cz', 'A−n', '', false, false],
+  ['CPID n',  2, 'D7 XX',    '6?',     'cz', '(DP)−n', '(R-1) used, may be incomplete', true, false],
+  ['CPIM n',  2, '63 XX',    '4',      'cz', '(P)−n', '', false, false],
+  ['CPCAL → PTC', 0, '', '', '', '', '', false, true],
+  ['CPMA',    1, 'C7',       '3',      'cz', '(P)−A', '', false, false],
+  ['CUP',     1, '4F',       '1+4·I',  '.z', 'I→d, REPEAT d-1→d, P+1→P UNTIL I=FF‖Xin=1', '', false, false],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['DATA',    1, '35',       '11+4·I', '..', '(BA)...(BA+1)→(P)...(P+1)', 'Reads internal ROM 0x0000–0x1FFF', false, false],
+  ['DECA',    1, '43',       '4',      'cz', 'A−1→A, 2→Q', '', false, false],
+  ['DECB',    1, 'C3',       '4',      'cz', 'B−1→B, 3→Q', '', false, false],
+  ['DECI',    1, '41',       '4',      'cz', 'I−1→I, 0→Q', '', false, false],
+  ['DECJ',    1, 'C1',       '4',      'cz', 'J−1→J, 1→Q', '', false, false],
+  ['DECK',    1, '49',       '4',      'cz', 'K−1→K, 8→Q', '', false, false],
+  ['DECL',    1, 'C9',       '4',      'cz', 'L−1→L, 9→Q', '', false, false],
+  ['DECM',    1, '4B',       '4',      'cz', 'M−1→M, 10→Q', '', false, false],
+  ['DECN',    1, 'CB',       '4',      'cz', 'N−1→N, 11→Q', '', false, false],
+  ['DECP',    1, '51',       '2',      '..', 'P−1→P', '', false, false],
+  ['DTC n,nm','*', '69',     '5+7·d',  '.z', 'FOR i=1 TO d: IF A=n nm→PC: NEXT i, A→H', 'n,nm are .db statements', false, false],
+  ['DTLRA → DTC', 0, '', '', '', '', '', false, true],
+  ['DX',      1, '05',       '6',      '..', 'X−1→X, X→DP, 5→Q, Xl→H', '', false, false],
+  ['DXL',     1, '25',       '7',      '..', 'X−1→X, X→DP, (DP)→A, 5→Q, Xl→H', '', false, false],
+  ['DY',      1, '07',       '6',      '..', 'Y−1→Y, Y→DP, 7→Q, Yl→H', '', false, false],
+  ['DYS',     1, '27',       '7',      '..', 'Y−1→Y, Y→DP, A→(DP), 7→Q, Yl→H', '', false, false],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['ETC → DTC', 0, '', '', '', '', '', false, true],
+  ['EXAB',    1, 'DA',       '3',      '..', 'A↔B', '', false, false],
+  ['EXAM',    1, 'DB',       '3',      '..', 'A↔(P)', '', false, false],
+  ['EXB',     1, '0B',       '6+3·J',  '..', '(P)..(P+J)↔(Q)..(Q+J), P+J+1→P, Q+J+1→Q', '', false, false],
+  ['EXBD',    1, '1B',       '7+6·J',  '..', '(P)..(P+J)↔(DP)..(DP+J), P+J+1→P, DP+J→DP', '', false, false],
+  ['EXW',     1, '09',       '6+3·I',  '..', '(P)..(P+I)↔(Q)..(Q+I), P+I+1→P, Q+I+1→Q', '', false, false],
+  ['EXWD',    1, '19',       '7+6·I',  '..', '(P)..(P+I)↔(DP)..(DP+I), P+I+1→P, DP+I→DP', '', false, false],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['FILD',    1, '1F',       '4+3·I',  '..', 'A→(DP)..(DP+I), DP+I→DP', '', false, false],
+  ['FILM',    1, '1E',       '5+I',    '..', 'A→(P)..(P+I), P+I+1→P, A→H', '', false, false],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['HALT',    1, '7B',       'n/a',    '?',  'Stops the CPU', 'undoc; see footnote ³', true, false],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['INA',     1, '4C',       '2',      '.z', 'IA-Port→A', '', false, false],
+  ['INB',     1, 'CC',       '2',      '.z', 'IB-Port→A', '', false, false],
+  ['INCA',    1, '42',       '4',      'cz', 'A+1→A, 2→Q', '', false, false],
+  ['INCB',    1, 'C2',       '4',      'cz', 'B+1→B, 3→Q', '', false, false],
+  ['INCI',    1, '40',       '4',      'cz', 'I+1→I, 0→Q', '', false, false],
+  ['INCJ',    1, 'C0',       '4',      'cz', 'J+1→J, 1→Q', '', false, false],
+  ['INCK',    1, '48',       '4',      'cz', 'K+1→K, 8→Q', '', false, false],
+  ['INCL',    1, 'C8',       '4',      'cz', 'L+1→L, 9→Q', '', false, false],
+  ['INCM',    1, '4A',       '4',      'cz', 'M+1→M, 10→Q', '', false, false],
+  ['INCN',    1, 'CA',       '4',      'cz', 'N+1→N, 11→Q', '', false, false],
+  ['INCP',    1, '50',       '2',      '..', 'P+1→P', '', false, false],
+  ['IPXH → CDN', 0, '', '', '', '', '', false, true],
+  ['IPXL → CUP', 0, '', '', '', '', '', false, true],
+  ['IX',      1, '04',       '6',      '..', 'X+1→X, X→DP, 5→Q, Xh→H', '', false, false],
+  ['IXL',     1, '24',       '7',      '..', 'X+1→X, X→DP, (DP)→A, 5→Q', '', false, false],
+  ['IY',      1, '06',       '6',      '..', 'Y+1→Y, Y→DP, 7→Q, Yh→H', '', false, false],
+  ['IYS',     1, '26',       '7',      '..', 'Y+1→Y, Y→DP, A→(DP), 7→Q', '', false, false],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['JP nm',   3, '79 XX XX', '6',      '..', 'nm→PC', '', false, false],
+  ['JPC nm',  3, '7F XX XX', '6',      '..', 'IF c=1 nm→PC', '', false, false],
+  ['JPNC nm', 3, '7D XX XX', '6',      '..', 'IF c=0 nm→PC', '', false, false],
+  ['JPNZ nm', 3, '7C XX XX', '6',      '..', 'IF z=0 nm→PC', '', false, false],
+  ['JPZ nm',  3, '7E XX XX', '6',      '..', 'IF z=1 nm→PC', '', false, false],
+  ['JRCM n',  2, '3B XX',    '7/4',    '..', 'IF c=1 PC+1−n→PC', '', false, false],
+  ['JRCP n',  2, '3A XX',    '7/4',    '..', 'IF c=1 PC+1+n→PC', '', false, false],
+  ['JRM n',   2, '2D XX',    '7',      '..', 'PC+1−n→PC', '', false, false],
+  ['JRNCM n', 2, '2B XX',    '7/4',    '..', 'IF c=0 PC+1−n→PC', '', false, false],
+  ['JRNCP n', 2, '2A XX',    '7/4',    '..', 'IF c=0 PC+1+n→PC', '', false, false],
+  ['JRNZM n', 2, '29 XX',    '7/4',    '..', 'IF z=0 PC+1−n→PC', '', false, false],
+  ['JRNZP n', 2, '28 XX',    '7/4',    '..', 'IF z=0 PC+1+n→PC', '', false, false],
+  ['JRP n',   2, '2C XX',    '7',      '..', 'PC+1+n→PC', '', false, false],
+  ['JRZM n',  2, '39 XX',    '7/4',    '..', 'IF z=1 PC+1−n→PC', '', false, false],
+  ['JRZP n',  2, '38 XX',    '7/4',    '..', 'IF z=1 PC+1+n→PC', '', false, false],
+  ['JST → DTC', 0, '', '', '', '', '', false, true],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['LDD',     1, '57',       '3',      '..', '(DP)→A', '', false, false],
+  ['LDM',     1, '59',       '2',      '..', '(P)→A', '', false, false],
+  ['LDP',     1, '20',       '2',      '..', 'P→A', '', false, false],
+  ['LDPC',    1, '56',       '3',      '..', '(PC+1)→A', 'undoc', true, false],
+  ['LDQ',     1, '21',       '2',      '..', 'Q→A', '', false, false],
+  ['LDR',     1, '22',       '2',      '..', 'R→A', '', false, false],
+  ['LDS → CLRA', 0, '', '', '', '', '', false, true],
+  ['LEAVE',   1, 'D8',       '2',      '..', '0→(R)', '(R-1) used', false, false],
+  ['LIA n',   2, '02 XX',    '4',      '..', 'n→A', '', false, false],
+  ['LIB n',   2, '03 XX',    '4',      '..', 'n→B', '', false, false],
+  ['LIDL m',  2, '11 XX',    '5',      '..', 'm→DPl, m→H', '', false, false],
+  ['LIDP nm', 3, '10 XX XX', '8',      '..', 'nm→DP, n→H', '', false, false],
+  ['LII n',   2, '00 XX',    '4',      '..', 'n→I', '', false, false],
+  ['LIIH n',  2, '72 XX',    '2',      '.0', 'H→I, n→H', 'undoc; alt: 73/76/77', true, false],
+  ['LIJ n',   2, '01 XX',    '4',      '..', 'n→J', '', false, false],
+  ['LIP n',   2, '12 XX',    '4',      '..', 'n→P, 0→H', '', false, false],
+  ['LIQ n',   2, '13 XX',    '4',      '..', 'n→Q, n→H', '', false, false],
+  ['LOOP n',  2, '2F XX',    '10/7',   'cz', '(R)−1→(R), IF c=0 PC+1−n→PC', '(R-1) used', false, false],
+  ['LP n',    1, '80+n',     '2',      '..', 'n→P, 80+n→H', 'n < 0x3F', false, false],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['MVB',     1, '0A',       '5+2·J',  '..', '(Q)..(Q+J)→(P)..(P+J), P+J+1→P, Q+J+1→Q', '', false, false],
+  ['MVBD',    1, '1A',       '5+4·J',  '..', '(DP)..(DP+J)→(P)..(P+J), P+J+1→P, DP+J→DP', '', false, false],
+  ['MVDM',    1, '53',       '3',      '..', '(P)→(DP)', '', false, false],
+  ['MVMD',    1, '55',       '3',      '..', '(DP)→(P)', '', false, false],
+  ['MVMP',    1, '54',       '3',      '..', '(PC+1)→(P)', '', false, false],
+  ['MVW',     1, '08',       '5+2·I',  '..', '(Q)...(Q+I)→(P)...(P+I), P+I+1→P, Q+I+1→Q', '', false, false],
+  ['MVWD',    1, '18',       '5+4·I',  '..', '(DP)...(DP+I)→(P)...(P+I), P+I+1→P, DP+I→DP', '', false, false],
+  ['MVWP → DATA', 0, '', '', '', '', '', false, true],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['NOPT',    1, 'CE',       '3',      '..', 'no operation', 'alt: 69/6A', false, false],
+  ['NOPW',    1, '4D',       '2',      '..', 'no operation', 'alt: CD/D3/D9', false, false],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['ORIA n',  2, '65 XX',    '4',      '.z', 'A|n→A', '', false, false],
+  ['ORID n',  2, 'D5 XX',    '6',      '.z', '(DP)|n→(DP), (DP)→(R-1)', '(R-2) used', false, false],
+  ['ORIM n',  2, '61 XX',    '4',      '.z', '(P)|n→(P)', '', false, false],
+  ['ORMA',    1, '47',       '3',      '.z', '(P)|A→(P)', '', false, false],
+  ['OUTA',    1, '5D',       '3',      '..', '(5C)→IA-Port, 5C→Q', '', false, false],
+  ['OUTB',    1, 'DD',       '2',      '..', '(5D)→IB-Port, 5D→Q', '', false, false],
+  ['OUTC',    1, 'DF',       '2',      '..', '(5F)→C-PORT', '', false, false],
+  ['OUTF',    1, '5F',       '3',      '..', '(5E)→F0-Port, 5E→Q', '', false, false],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['POP',     1, '5B',       '2',      '..', '(R)→A, R+1→R', '', false, false],
+  ['PTC n,nm',4, '7A',       '9?',     '..', 'n→d, nm→(R-1,R-2), R-2→R', 'n,nm are .db statements', false, false],
+  ['PTJ → PTC', 0, '', '', '', '', '', false, true],
+  ['PUSH',    1, '34',       '3',      '..', 'A→(R), R-1→R', '', false, false],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['RA → CLRA', 0, '', '', '', '', '', false, true],
+  ['RC',      1, 'D1',       '2',      '01', '0→c, 1→z', '', false, false],
+  ['READ → LDPC', 0, '', '', '', '', '', false, true],
+  ['READM → MVMP', 0, '', '', '', '', '', false, true],
+  ['RTN',     1, '37',       '4',      '..', '(R-1,R-2)→PC, R+2→R, PC-H→H', '', false, false],
+  ['RZ n → LIIH', 0, '', '', '', '', '', false, true],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['SBB',     1, '15',       '5',      'cz', '(P)−A→(P), (P+1)−B−c→(P+1), P+1→P', '', false, false],
+  ['SBCM',    1, 'C5',       '3',      'cz', '(P)−A−c→(P)', '', false, false],
+  ['SBIA n',  2, '75 XX',    '4',      'cz', 'A−n→A', '', false, false],
+  ['SBIM n',  2, '71 XX',    '4',      'cz', '(P)−n→(P)', '', false, false],
+  ['SBM',     1, '45',       '3',      'cz', '(P)−A→(P)', '', false, false],
+  ['SBN',     1, '0D',       '7+3·I',  'cz', '(P)−A→(P), (P−I)−c→(P−I), P−I−1→P, BCD', '', false, false],
+  ['SBW',     1, '0F',       '7+3·I',  'cz', '(P)−(Q)→(P), (P−I)−(Q−I)−c→(P−I), P−I−1→P, Q−I−2→Q, BCD', '', false, false],
+  ['SC',      1, 'D0',       '2',      '11', '1→c, 1→z', '', false, false],
+  ['SETT → PTC', 0, '', '', '', '', '', false, true],
+  ['SL',      1, '5A',       '2',      'c.', 'c→A0, A<<1, A7→c', '', false, false],
+  ['SLW',     1, '1D',       '5+I',    '..', '(P)<<4 [I+1 bytes], P−I−1→P', '', false, false],
+  ['SR',      1, 'D2',       '2',      'c.', 'c→A7, A>>1, A0→c', '', false, false],
+  ['SRW',     1, '1C',       '5+I',    '..', '(P)>>4 [I+1 bytes], P+I+1→P', '', false, false],
+  ['STD',     1, '52',       '2',      '..', 'A→(DP)', '', false, false],
+  ['STH',     1, '33',       '2',      '..', 'A→H', 'undoc; theoretically A→S', true, false],
+  ['STP',     1, '30',       '2',      '..', 'A→P, A→H', '', false, false],
+  ['STQ',     1, '31',       '2',      '..', 'A→Q, A→H', '', false, false],
+  ['STR',     1, '32',       '2',      '..', 'A→R, A→H', '', false, false],
+  ['STS → STH', 0, '', '', '', '', '', false, true],
+  ['SWP',     1, '58',       '2',      '..', '[A>>4|A<<4]→A', '', false, false],
+  ['SZ → CPID', 0, '', '', '', '', '', false, true],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['TEST n',  2, '6B XX',    '4',      '.z', 'Test-byte & n', '', false, false],
+  ['TSCM → TSMA', 0, '', '', '', '', '', false, true],
+  ['TSIA n',  2, '66 XX',    '4',      '.z', 'A&n', '', false, false],
+  ['TSID n',  2, 'D6 XX',    '6',      '.z', '(DP)&n, (DP)→(R-1)', '(R-1) used', false, false],
+  ['TSIM n',  2, '62 XX',    '4',      '.z', '(P)&n', '', false, false],
+  ['TSIP → TSMA', 0, '', '', '', '', '', false, true],
+  ['TSMA',    1, 'C6',       '3',      '.z', '(P)&A', 'undoc', true, false],
+  ['—', 0, '', '', '', '', '', false, false],
+  ['WAIT n',  2, '4E XX',    '6+n',    '..', 'no operation for n+6 cycles', '', false, false],
+  ['WAITI → CUP', 0, '', '', '', '', '', false, true],
+  ['WRIT → NOPW', 0, '', '', '', '', '', false, true],
+];
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function buildTable() {
+  const tbody = document.getElementById('isa-tbody');
+  let html = '';
+  for (const row of ISA) {
+    const [mnem, size, opcode, clocks, cz, effect, remarks, isUndoc, isAlias] = row;
+
+    // Separator row
+    if (mnem === '—') {
+      html += `<tr class="alias-row"><td colspan="7" style="padding:3px 0;border:none"></td></tr>`;
+      continue;
+    }
+
+    // Alias row
+    if (isAlias) {
+      html += `<tr class="alias-row" data-mnem="${esc(mnem.toLowerCase())}">
+        <td class="td-mnem alias" colspan="2"><em>${esc(mnem)}</em></td>
+        <td colspan="5" class="td-remarks" style="color:var(--dim)">alias</td>
+      </tr>`;
+      continue;
+    }
+
+    const mnemBase = mnem.split(' ')[0];
+    const undocBadge = isUndoc ? `<span class="badge-undoc">²</span>` : '';
+
+    html += `<tr data-mnem="${esc(mnem.toLowerCase())} ${esc(opcode.toLowerCase())} ${esc(effect.toLowerCase())}">
+      <td class="td-mnem${isUndoc?' undoc':''}">${esc(mnem)}${undocBadge}</td>
+      <td class="td-size">${size > 0 ? size : ''}</td>
+      <td class="td-opcode">${esc(opcode)}</td>
+      <td class="td-clocks">${esc(clocks)}</td>
+      <td class="td-flags">${esc(cz)}</td>
+      <td class="td-effect"><code>${esc(effect)}</code></td>
+      <td class="td-remarks">${esc(remarks)}</td>
+    </tr>`;
+  }
+  tbody.innerHTML = html;
+}
+
+// ── SEARCH ────────────────────────────────────────────────────────────────────
+function searchTable(q) {
+  q = q.trim().toLowerCase();
+  const rows = document.querySelectorAll('#isa-tbody tr');
+  rows.forEach(tr => {
+    if (!q) { tr.classList.remove('hidden'); return; }
+    const haystack = (tr.dataset.mnem || '') + ' ' + tr.textContent.toLowerCase();
+    tr.classList.toggle('hidden', !haystack.includes(q));
+  });
+}
+
+// ── TOC ACTIVE STATE ──────────────────────────────────────────────────────────
+function updateTOC() {
+  const sections = document.querySelectorAll('h2[id]');
+  const links    = document.querySelectorAll('.toc-link');
+  let current = '';
+  sections.forEach(s => {
+    if (s.getBoundingClientRect().top <= 80) current = s.id;
+  });
+  links.forEach(l => {
+    l.classList.toggle('active', l.getAttribute('href') === '#' + current);
+  });
+}
+window.addEventListener('scroll', updateTOC, { passive: true });
+
+buildTable();
+updateTOC();
+</script>
+</body>
+</html>
