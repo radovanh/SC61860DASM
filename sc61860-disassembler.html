@@ -82,9 +82,12 @@
     text-shadow: var(--glow);
     letter-spacing: 2px;
     white-space: nowrap;
+    text-decoration: none;
   }
   .logo span { color: var(--accent2); text-shadow: 0 0 8px rgba(255,107,53,0.5); }
   .tagline { color: var(--muted); font-size: 11px; letter-spacing: 1px; }
+  .nav-back { font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700; color: var(--muted); text-decoration: none; letter-spacing: 1px; border: 1px solid var(--dim); padding: 5px 12px; border-radius: 2px; transition: all 0.2s; }
+  .nav-back:hover { color: var(--accent); border-color: var(--accent); }
   .badge {
     margin-left: auto;
     font-size: 11px;
@@ -364,9 +367,10 @@
 
 <header>
   <div>
-    <div class="logo"><a class="logo" href="index.html">SC<span>61860</span> DASM</div>
+    <a class="logo" href="index.html">SC<span>61860</span> DASM</a>
     <div class="tagline">SHARP ESR-H CPU DISASSEMBLER &bull; PC-12xx / 13xx / 14xx</div>
   </div>
+  <a class="nav-back" href="index.html">&#8592; INDEX</a>
   <div class="badge">CPU: <em>HITACHI SC61860</em><br>ARCH: <em>ESR-H / 8-bit</em></div>
 </header>
 
