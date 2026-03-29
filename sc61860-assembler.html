@@ -252,6 +252,36 @@
   .out-tab:hover { color: var(--text); }
   .out-tab.active { color: var(--accent2); background: rgba(255,107,53,0.06); }
 
+  /* ── Download dropdown ── */
+  .dl-wrap { position: relative; display: inline-flex; }
+  .dl-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    min-width: 160px;
+    z-index: 200;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  .dl-wrap.open .dl-menu { display: block; }
+  .dl-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px; font-family: 'Orbitron', monospace;
+    font-size: 10px; font-weight: 700; letter-spacing: 1px;
+    color: var(--muted); cursor: pointer; white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+    border-bottom: 1px solid var(--border);
+  }
+  .dl-item:last-child { border-bottom: none; }
+  .dl-item:hover { background: rgba(255,107,53,0.08); color: var(--accent2); }
+  .dl-item .dl-ext {
+    font-size: 9px; color: var(--dim); border: 1px solid var(--dim);
+    padding: 1px 5px; border-radius: 1px; letter-spacing: 0.5px;
+  }
+
   @media (max-width: 700px) {
     .workspace { flex-direction: column; }
     #pane-left { width: 100% !important; flex: 0 0 250px; }
@@ -267,7 +297,7 @@
 
 <header>
   <div>
-    <div class="logo"><a class="logo" href="index.html">SC<span>61860</span> ASM</div>
+    <div class="logo"><a class="logo" href="index.html">SC<span>61860</span></a></div>
     <div class="tagline">SHARP ESR-H CPU ASSEMBLER &bull; TWO-PASS &bull; PC-12xx / 13xx / 14xx</div>
   </div>
   <a class="nav-back" href="index.html">&#8592; INDEX</a>
@@ -285,6 +315,17 @@
   <button class="btn btn-danger" onclick="clearAll()">CLEAR</button>
   <div class="sep"></div>
   <button class="btn btn-secondary" id="copy-btn" onclick="copyOutput()">COPY HEX</button>
+  <div class="dl-wrap" id="dl-wrap">
+    <button class="btn btn-secondary" onclick="toggleDlMenu()">&#8595;&nbsp;DOWNLOAD</button>
+    <div class="dl-menu" id="dl-menu">
+      <div class="dl-item" onclick="downloadAs('hex')">
+        <span>HEX TEXT</span><span class="dl-ext">.hex</span>
+      </div>
+      <div class="dl-item" onclick="downloadAs('bin')">
+        <span>BINARY</span><span class="dl-ext">.bin</span>
+      </div>
+    </div>
+  </div>
 
   <div class="stat-pill" id="stats">READY</div>
 </div>
@@ -1213,6 +1254,81 @@ DATA_BUF:
 
 // initial line numbers
 updateLineNums();
+
+// ══════════════════════════════════════════════════════════
+// DOWNLOAD
+// ══════════════════════════════════════════════════════════
+function toggleDlMenu() {
+  document.getElementById('dl-wrap').classList.toggle('open');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('dl-wrap');
+  if (!wrap.contains(e.target)) wrap.classList.remove('open');
+});
+
+function getOutputBytes() {
+  if (!lastResult) return null;
+  const addrMap = new Map();
+  for (const row of lastResult.output) {
+    row.bytes.forEach((b, i) => addrMap.set((row.addr + i) & 0xFFFF, b));
+  }
+  if (!addrMap.size) return null;
+  const keys = [...addrMap.keys()].sort((a, b) => a - b);
+  return { keys, addrMap };
+}
+
+function downloadAs(format) {
+  document.getElementById('dl-wrap').classList.remove('open');
+
+  const data = getOutputBytes();
+  if (!data) {
+    alert('Nothing assembled yet — assemble your source first.');
+    return;
+  }
+  const { keys, addrMap } = data;
+
+  if (format === 'hex') {
+    // Intel-style plain hex text: address header + 16-byte rows
+    const startAddr = keys[0];
+    let lines = [
+      `; SC61860 assembled output`,
+      `; Origin: $${h4(startAddr)}  Bytes: ${keys.length}`,
+      ``
+    ];
+    for (let i = 0; i < keys.length; i += 16) {
+      const rowKeys = keys.slice(i, i + 16);
+      const hexBytes = rowKeys.map(a => h2(addrMap.get(a))).join(' ');
+      lines.push(`$${h4(rowKeys[0])}: ${hexBytes}`);
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    triggerDownload(blob, 'sc61860_output.hex');
+
+  } else if (format === 'bin') {
+    // Raw binary: contiguous from first to last address, gaps filled with 0x00
+    const startAddr = keys[0];
+    const endAddr   = keys[keys.length - 1];
+    const length    = endAddr - startAddr + 1;
+    const buf       = new Uint8Array(length);
+    for (const [addr, byte] of addrMap) {
+      buf[addr - startAddr] = byte;
+    }
+    const blob = new Blob([buf], { type: 'application/octet-stream' });
+    triggerDownload(blob, 'sc61860_output.bin');
+  }
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 </script>
 </body>
 </html>

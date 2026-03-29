@@ -401,10 +401,12 @@
   <div class="sep"></div>
 
   <button class="btn btn-primary"   onclick="disassemble()">&#9654;&nbsp;DISASSEMBLE</button>
+  <button class="btn btn-secondary" onclick="triggerFileOpen()">&#128194;&nbsp;LOAD FILE</button>
   <button class="btn btn-secondary" onclick="loadSample()">SAMPLE</button>
   <button class="btn btn-danger"    onclick="clearAll()">CLEAR</button>
   <div class="sep"></div>
   <button class="btn btn-secondary" id="copy-btn" onclick="copyOutput()">COPY</button>
+  <input type="file" id="file-input" accept=".bin,.rom,.hex,.txt,.asm,.s,*" style="display:none" onchange="handleFileLoad(this)">
 
   <div class="stat-pill" id="stats">READY</div>
 </div>
@@ -886,6 +888,95 @@ function copyOutput() {
     btn.textContent='COPIED!';
     setTimeout(()=>btn.textContent=orig,1400);
   });
+}
+
+
+// ══════════════════════════════════════════════════════════
+// FILE LOAD
+// ══════════════════════════════════════════════════════════
+function triggerFileOpen() {
+  // Reset so same file can be reloaded
+  const fi = document.getElementById('file-input');
+  fi.value = '';
+  fi.click();
+}
+
+function handleFileLoad(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  const name   = file.name.toLowerCase();
+
+  // Detect format: treat as text if extension is .hex/.txt/.asm/.s
+  // or if the file starts with printable ASCII (sniff first 512 bytes).
+  // Everything else → binary.
+  const textExts = ['.hex','.txt','.asm','.s'];
+  const forceText = textExts.some(e => name.endsWith(e));
+
+  if (forceText) {
+    reader.onload = e => loadTextHex(e.target.result, file.name);
+    reader.readAsText(file);
+  } else {
+    // Read as binary, then sniff
+    reader.onload = e => {
+      const buf   = e.target.result;
+      const bytes = new Uint8Array(buf);
+      if (looksLikeTextHex(bytes)) {
+        // Re-read as text
+        const r2 = new FileReader();
+        r2.onload = ev => loadTextHex(ev.target.result, file.name);
+        r2.readAsText(file);
+      } else {
+        loadBinary(bytes, file.name);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+}
+
+// Heuristic: if >80% of first 512 bytes are printable ASCII → text
+function looksLikeTextHex(bytes) {
+  const sample = bytes.slice(0, 512);
+  let printable = 0;
+  for (const b of sample) {
+    if ((b >= 0x20 && b <= 0x7E) || b === 0x09 || b === 0x0A || b === 0x0D) printable++;
+  }
+  return sample.length === 0 || (printable / sample.length) > 0.80;
+}
+
+// Load a text file containing hex values (space/comma/newline separated)
+function loadTextHex(text, filename) {
+  document.getElementById('hex-input').value = text;
+  updateFileLabel(filename, 'TEXT');
+  disassemble();
+}
+
+// Load raw binary — convert to spaced hex string, 16 bytes per line
+function loadBinary(bytes, filename) {
+  const lines = [];
+  for (let i = 0; i < bytes.length; i += 16) {
+    lines.push(Array.from(bytes.slice(i, i + 16)).map(b => h2(b)).join(' '));
+  }
+  document.getElementById('hex-input').value = lines.join('\n');
+  updateFileLabel(filename, 'BINARY — ' + bytes.length + ' bytes');
+  disassemble();
+}
+
+function updateFileLabel(filename, type) {
+  // Show filename in the pane header
+  const header = document.querySelector('#pane-left .pane-header');
+  const short  = filename.length > 28 ? '…' + filename.slice(-26) : filename;
+  header.innerHTML =
+    `<div class="dot"></div>` +
+    `<span style="color:var(--accent)">${esc(short)}</span>` +
+    `<span style="color:var(--dim);font-size:10px;margin-left:8px">${esc(type)}</span>` +
+    `<span style="margin-left:auto;cursor:pointer;color:var(--muted);font-size:10px" onclick="resetPaneHeader()">✕ CLEAR</span>`;
+}
+
+function resetPaneHeader() {
+  document.querySelector('#pane-left .pane-header').innerHTML =
+    `<div class="dot"></div>HEX INPUT — SPACE / COMMA / NEWLINE SEPARATED`;
 }
 
 function loadSample() {
