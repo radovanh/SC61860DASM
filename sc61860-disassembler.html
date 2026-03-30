@@ -837,11 +837,28 @@ const ROM_MAP_RAW = [
   [['1360'],0x8108,'SIO_RECV',        'Receive byte via RS-232'],
   [['1360'],0x8200,'DISK_SAVE',       'Save to CE-1600F disk drive'],
   [['1360'],0x8210,'DISK_LOAD',       'Load from CE-1600F disk drive'],
-  // ── PC-1261/1262 ──────────────────────────────────────────
-  [['1262'],0x8000,'MAIN_ENTRY',      'Cold start / power-on entry'],
-  [['1262'],0x8040,'DISP_CHAR',       'Display char in A (2-line × 16 char LCD)'],
-  [['1262'],0x8080,'BEEP',            'Sound buzzer'],
-  [['1262'],0x80A0,'READ_KEY',        'Block and wait for keypress'],
+  // ── PC-1261/1262 — from Sharp PC-1261 manual §VII.4 ─────
+  [['1262'],0x0222,'CORE_0222',        'Core ROM routine (function unclear)'],
+  [['1262'],0x0225,'CORE_0225',        'Core ROM routine'],
+  [['1262'],0x022E,'CORE_022E',        'Core ROM routine'],
+  [['1262'],0x0242,'CORE_0242',        'Core ROM routine'],
+  [['1262'],0x0437,'DISPLAY_OFF',      'Turn LCD display OFF'],
+  [['1262'],0x043B,'DISPLAY_ON',       'Turn LCD display ON'],
+  [['1262'],0x0F65,'CORE_0F65',        'Core ROM routine'],
+  [['1262'],0x133B,'CORE_133B',        'Core ROM routine'],
+  [['1262'],0x1349,'CORE_1349',        'Core ROM routine'],
+  [['1262'],0x134E,'CORE_134E',        'Core ROM routine'],
+  [['1262'],0x1B2F,'CORE_1B2F',        'Core ROM routine'],
+  [['1262'],0x1BB0,'CORE_1BB0',        'Core ROM routine'],
+  [['1262'],0x1BD6,'CORE_1BD6',        'Core ROM routine'],
+  [['1262'],0x03C1,'SCAN_KEY',         'Check if key currently pressed (non-blocking); A=key or no-key'],
+  [['1262'],0x107D,'WAIT_KEY_ALT',     'Wait for keypress — alternate entry point'],
+  [['1262'],0x800F,'DISP_REFRESH',     'Refresh LCD from buffer: &6650–&6667→line1, &6668–&667F→line2'],
+  [['1262'],0x106D,'PRINT_PROMPT_ALT', 'Output prompt character to display — alternate entry'],
+  [['1262'],0x8021,'PRINT_PROMPT',     'Output prompt character to display'],
+  [['1262'],0x1B92,'PRINT_EXPR_ALT',   'Print expression (&10–&27) to CE-126P — alternate entry'],
+  [['1262'],0x1B90,'PRINT_EXPR_ALT2',  'Print expression to CE-126P — secondary alternate entry'],
+  [['1262'],0x8000,'MAIN_ENTRY',       'Cold start / power-on ROM entry point'],
 ];
 
 // Build per-device lookup maps: device → Map<addr, {name, desc}>
