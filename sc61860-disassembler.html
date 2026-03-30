@@ -177,6 +177,18 @@
   .stat-pill { font-size: 11px; color: var(--muted); margin-left: auto; }
   .stat-pill em { color: var(--green); font-style: normal; font-weight: bold; }
 
+  /* device selector */
+  .filter-group { display: flex; align-items: center; gap: 6px; }
+  .filter-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
+  select {
+    background: var(--bg); border: 1px solid var(--border); color: var(--accent2);
+    font-family: 'Share Tech Mono', monospace; font-size: 11px;
+    padding: 4px 8px; border-radius: 2px; outline: none; height: 28px; cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  select:focus { border-color: var(--accent2); }
+  select option { background: var(--panel); }
+
   /* ── SPLIT WORKSPACE ── */
   .workspace {
     flex: 1;
@@ -308,7 +320,15 @@
   .col-mnem    { color: var(--mnem);    width: 72px;  flex-shrink: 0; font-weight: bold; }
   .col-operand { color: var(--operand); width: 120px; flex-shrink: 0; }
   .col-label   { color: var(--label);   width: 120px; flex-shrink: 0; text-shadow: var(--glow3); }
+  .col-rom-ref { color: var(--accent2); width: 120px; flex-shrink: 0; text-shadow: 0 0 8px rgba(255,107,53,0.4); }
   .col-comment { color: var(--comment); font-size: 11px; flex-shrink: 0; }
+
+  /* ROM label definition row — orange tint to distinguish from branch labels */
+  .label-def.label-rom {
+    color: var(--accent2);
+    border-left-color: var(--accent2);
+    text-shadow: 0 0 8px rgba(255,107,53,0.35);
+  }
 
   .error-msg { color: var(--error); padding: 20px; font-size: 13px; }
 
@@ -396,6 +416,18 @@
       <div class="toggle-opt active" id="label-lbl">LABELS</div>
       <div class="toggle-opt"        id="label-addr">ADDRESSES</div>
     </div>
+  </div>
+
+  <div class="filter-group">
+    <span class="filter-label">DEVICE</span>
+    <select id="device-select" onchange="disassemble()" title="Select device to annotate ROM entry point calls">
+      <option value="">— NONE —</option>
+      <option value="1401">PC-1401/1402</option>
+      <option value="1403">PC-1403/1460</option>
+      <option value="1350">PC-1350</option>
+      <option value="1360">PC-1360</option>
+      <option value="1262">PC-1261/1262</option>
+    </select>
   </div>
 
   <div class="sep"></div>
@@ -719,6 +751,115 @@ function esc(s) {
 }
 
 // ══════════════════════════════════════════════════════════
+// ROM / MEMORY MAP DATABASE
+// Keyed by device id, value is Map<addr, {name, desc}>
+// ══════════════════════════════════════════════════════════
+const ROM_MAP_RAW = [
+  // [devices[], addr, name, desc]
+  // ── PC-1401/1402 ─────────────────────────────────────────
+  [['1401'],0x8000,'MAIN_ENTRY',      'Cold start / power-on entry'],
+  [['1401'],0x8024,'WARM_START',      'Warm restart → BASIC prompt'],
+  [['1401'],0x8040,'DISP_CHAR',       'Display char in A at cursor'],
+  [['1401'],0x8048,'DISP_STRING',     'Display null-terminated string via DP'],
+  [['1401'],0x8050,'CLEAR_DISPLAY',   'Clear LCD and home cursor'],
+  [['1401'],0x8058,'SET_CURSOR',      'Set cursor column to A (0–15)'],
+  [['1401'],0x8060,'SCROLL_LEFT',     'Scroll display one char left'],
+  [['1401'],0x8068,'BEEP',            'Short buzzer beep (~4 kHz)'],
+  [['1401'],0x8070,'LONG_BEEP',       'Long buzzer beep'],
+  [['1401'],0x8080,'READ_KEY',        'Block and wait for keypress; result in A'],
+  [['1401'],0x8088,'SCAN_KEY',        'Poll keyboard; A=key or $FF if none'],
+  [['1401'],0x8090,'DISP_HEX',        'Display A as 2-digit hex on LCD'],
+  [['1401'],0x80A0,'INT_TO_BCD',      'Convert A (8-bit int) to BCD accumulator'],
+  [['1401'],0x80B0,'MATH_ADD',        'BCD float: accumulator += X'],
+  [['1401'],0x80B8,'MATH_SUB',        'BCD float: accumulator -= X'],
+  [['1401'],0x80C0,'MATH_MUL',        'BCD float multiply'],
+  [['1401'],0x80C8,'MATH_DIV',        'BCD float divide'],
+  [['1401'],0x80D0,'MATH_SQRT',       'BCD float: square root of accumulator'],
+  [['1401'],0x80E0,'MATH_SIN',        'BCD float: sine (uses angle mode)'],
+  [['1401'],0x80E8,'MATH_COS',        'BCD float: cosine'],
+  [['1401'],0x80F0,'MATH_TAN',        'BCD float: tangent'],
+  [['1401'],0x80F8,'MATH_LOG',        'BCD float: natural logarithm'],
+  [['1401'],0x8100,'MATH_EXP',        'BCD float: e^x'],
+  [['1401'],0x8120,'CASSETTE_SAVE',   'Save data block to CE-124 cassette'],
+  [['1401'],0x8130,'CASSETTE_LOAD',   'Load data block from CE-124 cassette'],
+  [['1401'],0x8200,'PRINT_CHAR',      'Send char A to CE-126P printer'],
+  // ── PC-1403/1460 ─────────────────────────────────────────
+  [['1403'],0x8000,'MAIN_ENTRY',      'Cold start / power-on entry'],
+  [['1403'],0x8020,'WARM_START',      'Warm restart → BASIC prompt'],
+  [['1403'],0x8040,'DISP_CHAR',       'Display char in A at cursor (24-char LCD)'],
+  [['1403'],0x8050,'DISP_STRING',     'Display null-terminated string via DP'],
+  [['1403'],0x8060,'CLEAR_DISPLAY',   'Clear 24-char LCD and home cursor'],
+  [['1403'],0x8068,'SET_CURSOR',      'Set cursor column to A (0–23)'],
+  [['1403'],0x8080,'BEEP',            'Short buzzer beep; CALL 32896 in BASIC'],
+  [['1403'],0x8090,'READ_KEY',        'Block and wait for keypress; CALL 32912'],
+  [['1403'],0x8098,'SCAN_KEY',        'Poll keyboard; A=key or $FF if none'],
+  [['1403'],0x80A0,'DISP_HEX_BYTE',  'Display A as 2-digit hex at cursor'],
+  [['1403'],0x80B0,'MATH_ADD',        'BCD float: accumulator += X'],
+  [['1403'],0x80B8,'MATH_SUB',        'BCD float: accumulator -= X'],
+  [['1403'],0x80C0,'MATH_MUL',        'BCD float multiply'],
+  [['1403'],0x80C8,'MATH_DIV',        'BCD float divide'],
+  [['1403'],0x80D0,'MATH_SQRT',       'BCD float: square root'],
+  [['1403'],0x80E0,'MATH_SIN',        'BCD float: sine (uses angle mode $28A4)'],
+  [['1403'],0x80E8,'MATH_COS',        'BCD float: cosine'],
+  [['1403'],0x80F0,'MATH_TAN',        'BCD float: tangent'],
+  [['1403'],0x80F8,'MATH_LN',         'BCD float: natural logarithm'],
+  [['1403'],0x8100,'MATH_EXP',        'BCD float: e^x'],
+  [['1403'],0x8108,'MATH_LOG10',      'BCD float: common log (base 10)'],
+  [['1403'],0x8200,'PRINT_CHAR',      'Send char A to CE-126P printer'],
+  [['1403'],0x8204,'PRINT_CR',        'Send carriage-return to printer'],
+  [['1403'],0x8300,'SIO_SEND_BYTE',   'Transmit byte A via SIO serial port'],
+  [['1403'],0x8308,'SIO_RECV_BYTE',   'Receive byte from SIO; result in A'],
+  [['1403'],0x8400,'CASSETTE_SAVE',   'Save to CE-124 cassette'],
+  [['1403'],0x8410,'CASSETTE_LOAD',   'Load from CE-124 cassette'],
+  // ── PC-1350 ───────────────────────────────────────────────
+  [['1350'],0x8000,'MAIN_ENTRY',      'Cold start / power-on entry'],
+  [['1350'],0x8040,'DISP_CHAR',       'Display char in A at text cursor'],
+  [['1350'],0x8058,'CLEAR_DISPLAY',   'Clear LCD'],
+  [['1350'],0x8080,'BEEP',            'Short buzzer beep'],
+  [['1350'],0x80A0,'READ_KEY',        'Block and wait for keypress'],
+  [['1350'],0x80B0,'PSET',            'Plot pixel at (XL,YL)'],
+  [['1350'],0x80B8,'PRESET',          'Erase pixel at (XL,YL)'],
+  [['1350'],0x80C0,'DRAW_LINE',       'Draw line on 150×32 px graphics LCD'],
+  [['1350'],0x80E0,'MATH_ADD',        'BCD float: accumulator += X'],
+  [['1350'],0x80E8,'MATH_MUL',        'BCD float multiply'],
+  [['1350'],0x8100,'CASSETTE_SAVE',   'Save to CE-124 cassette'],
+  [['1350'],0x8110,'CASSETTE_LOAD',   'Load from CE-124 cassette'],
+  // ── PC-1360 ───────────────────────────────────────────────
+  [['1360'],0x8000,'MAIN_ENTRY',      'Cold start / power-on entry'],
+  [['1360'],0x8040,'DISP_CHAR',       'Display char in A at cursor (4-line display)'],
+  [['1360'],0x8060,'CLEAR_DISPLAY',   'Clear full LCD'],
+  [['1360'],0x8080,'BEEP',            'Short buzzer beep'],
+  [['1360'],0x80A0,'READ_KEY',        'Block and wait for keypress'],
+  [['1360'],0x80C0,'PSET',            'Plot pixel (150×32 px LCD)'],
+  [['1360'],0x80C8,'PRESET',          'Erase pixel'],
+  [['1360'],0x80D0,'DRAW_LINE',       'Draw line on graphics LCD'],
+  [['1360'],0x8100,'SIO_SEND',        'Transmit byte via RS-232 (11-pin)'],
+  [['1360'],0x8108,'SIO_RECV',        'Receive byte via RS-232'],
+  [['1360'],0x8200,'DISK_SAVE',       'Save to CE-1600F disk drive'],
+  [['1360'],0x8210,'DISK_LOAD',       'Load from CE-1600F disk drive'],
+  // ── PC-1261/1262 ──────────────────────────────────────────
+  [['1262'],0x8000,'MAIN_ENTRY',      'Cold start / power-on entry'],
+  [['1262'],0x8040,'DISP_CHAR',       'Display char in A (2-line × 16 char LCD)'],
+  [['1262'],0x8080,'BEEP',            'Sound buzzer'],
+  [['1262'],0x80A0,'READ_KEY',        'Block and wait for keypress'],
+];
+
+// Build per-device lookup maps: device → Map<addr, {name, desc}>
+const ROM_MAPS = {};
+for (const [devs, addr, name, desc] of ROM_MAP_RAW) {
+  for (const dev of devs) {
+    if (!ROM_MAPS[dev]) ROM_MAPS[dev] = new Map();
+    ROM_MAPS[dev].set(addr, { name, desc });
+  }
+}
+
+// Return {name, desc} for the given address + device, or null
+function romLookup(addr, deviceId) {
+  if (!deviceId || !ROM_MAPS[deviceId]) return null;
+  return ROM_MAPS[deviceId].get(addr) || null;
+}
+
+// ══════════════════════════════════════════════════════════
 // HEX PARSER
 // ══════════════════════════════════════════════════════════
 function parseHex(input) {
@@ -783,49 +924,89 @@ function buildLabelMap(lines) {
 // RENDER
 // ══════════════════════════════════════════════════════════
 function disassemble() {
-  const input  = document.getElementById('hex-input').value;
-  const orgStr = document.getElementById('org-addr').value.trim()||'0000';
-  const org    = parseInt(orgStr,16)||0;
-  const bytes  = parseHex(input);
+  const input    = document.getElementById('hex-input').value;
+  const orgStr   = document.getElementById('org-addr').value.trim()||'0000';
+  const org      = parseInt(orgStr,16)||0;
+  const deviceId = document.getElementById('device-select').value;
+  const bytes    = parseHex(input);
   if (!bytes.length) { showError('NO VALID HEX BYTES FOUND'); return; }
   const lines    = disassembleBytes(bytes, org, useBigEndian);
   const labelMap = useLabels ? buildLabelMap(lines) : new Map();
-  renderOutput(lines, org, bytes.length, labelMap);
+  renderOutput(lines, org, bytes.length, labelMap, deviceId);
 }
 
-function renderOutput(lines, org, byteCount, labelMap) {
-  const scroll = document.getElementById('output-scroll');
-  const inner  = document.getElementById('output-inner');
+function renderOutput(lines, org, byteCount, labelMap, deviceId) {
+  const inner = document.getElementById('output-inner');
   inner.innerHTML='';
   const frag=document.createDocumentFragment();
-  let errCount=0;
+  let errCount=0, romHitCount=0;
 
   for (const line of lines) {
-    // label definition
+    // ── ROM entry point label definition (device annotations) ──
+    // If this address itself is a known ROM entry, show it as a
+    // top-level label even if it wasn't a branch target in code.
+    const romSelf = romLookup(line.addr, deviceId);
+    if (romSelf && !labelMap.has(line.addr)) {
+      const ld=document.createElement('div');
+      ld.className='label-def label-rom';
+      ld.textContent=`${romSelf.name}:`;
+      ld.title=romSelf.desc;
+      frag.appendChild(ld);
+    }
+
+    // ── Branch/call target label definition ──
     if (labelMap.has(line.addr)) {
       const ld=document.createElement('div');
       ld.className='label-def';
       ld.textContent=labelMap.get(line.addr)+':';
       frag.appendChild(ld);
     }
-    // instruction row
+
+    // ── Instruction row ──
     if (line.isError) errCount++;
     const div=document.createElement('div');
     div.className='asm-line'
       +(line.isError?' error-line':'')
-      +(labelMap.has(line.addr)?' jump-target':'');
+      +(labelMap.has(line.addr)||romSelf?' jump-target':'');
 
     const hexStr=line.raw.map(h2).join(' ');
-    let dispOperand=line.operand, isLabelRef=false;
-    if (useLabels && line.target!==null && labelMap.has(line.target)) {
-      dispOperand=labelMap.get(line.target); isLabelRef=true;
-    }
-    let dispComment=line.comment;
-    if (isLabelRef) dispComment+=`  → $${h4(line.target)}`;
 
-    const opHtml=isLabelRef
-      ?`<span class="col-label">${esc(dispOperand)}</span>`
-      :`<span class="col-operand">${esc(dispOperand)}</span>`;
+    // Resolve operand display
+    let dispOperand=line.operand, isLabelRef=false, isRomRef=false;
+    let romInfo=null;
+
+    if (line.target !== null) {
+      // Check ROM map first
+      romInfo = romLookup(line.target, deviceId);
+      if (romInfo) {
+        isRomRef=true;
+        romHitCount++;
+        // In labels mode show ROM name, otherwise keep address
+        dispOperand = useLabels ? romInfo.name : `$${h4(line.target)}`;
+      } else if (useLabels && labelMap.has(line.target)) {
+        dispOperand=labelMap.get(line.target);
+        isLabelRef=true;
+      }
+    }
+
+    // Build comment: instruction effect + ROM annotation
+    let dispComment=line.comment;
+    if (romInfo) {
+      dispComment=romInfo.desc;
+      if (!useLabels) dispComment=`${romInfo.name}: ${dispComment}`;
+    } else if (isLabelRef) {
+      dispComment+=`  → $${h4(line.target)}`;
+    }
+
+    // Operand HTML — ROM refs get a distinct colour
+    let opHtml;
+    if (isRomRef) {
+      opHtml=`<span class="col-rom-ref">${esc(dispOperand)}</span>`;
+    } else if (isLabelRef) {
+      opHtml=`<span class="col-label">${esc(dispOperand)}</span>`;
+    } else {
+      opHtml=`<span class="col-operand">${esc(dispOperand)}</span>`;
+    }
 
     div.innerHTML=
       `<span class="col-addr">$${h4(line.addr)}</span>`+
@@ -849,7 +1030,9 @@ function renderOutput(lines, org, byteCount, labelMap) {
   const lc=labelMap.size;
   document.getElementById('stats').innerHTML=
     `<em>${lines.length}</em> instr &bull; <em>${byteCount}</em> bytes`+
-    (lc?` &bull; <em>${lc}</em> labels`:'');
+    (lc?` &bull; <em>${lc}</em> labels`:'')+
+    (romHitCount?` &bull; <em style="color:var(--accent2)">${romHitCount}</em> ROM ref${romHitCount>1?'s':''}`:'')+
+    (deviceId?` &bull; <span style="color:var(--muted);font-size:10px">PC-${deviceId}</span>`:'');
 }
 
 function showError(msg) {

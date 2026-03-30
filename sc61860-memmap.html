@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC61860 Memory Map Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0a0c10;
+    --panel:   #0f1319;
+    --panel2:  #121820;
+    --border:  #1e2d3d;
+    --accent:  #00e5ff;
+    --accent2: #ff6b35;
+    --green:   #39ff14;
+    --purple:  #c792ea;
+    --yellow:  #e8d87a;
+    --dim:     #3a4a5a;
+    --text:    #c8d8e8;
+    --muted:   #5a7a8a;
+    --error:   #ff4444;
+    --warn:    #ffaa00;
+    --glow:    0 0 8px rgba(0,229,255,0.35);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    display: flex; flex-direction: column;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.09) 2px, rgba(0,0,0,0.09) 4px);
+    pointer-events: none; z-index: 9999;
+  }
+
+  /* ── HEADER ── */
+  header {
+    flex-shrink: 0; border-bottom: 1px solid var(--border);
+    padding: 14px 28px; display: flex; align-items: center; gap: 20px;
+    background: linear-gradient(180deg, rgba(0,229,255,0.03) 0%, transparent 100%);
+    position: relative;
+  }
+  header::after {
+    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.4;
+  }
+  .logo { font-family: 'Orbitron', monospace; font-weight: 900; font-size: 18px; color: var(--accent); text-shadow: var(--glow); letter-spacing: 2px; white-space: nowrap; text-decoration: none; }
+  .logo span { color: var(--accent2); }
+  .tagline { font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+  .nav-back { font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700; color: var(--muted); text-decoration: none; letter-spacing: 1px; border: 1px solid var(--dim); padding: 5px 12px; border-radius: 2px; transition: all 0.2s; }
+  .nav-back:hover { color: var(--accent); border-color: var(--accent); }
+  .badge { margin-left: auto; font-size: 11px; color: var(--muted); text-align: right; line-height: 1.6; }
+  .badge em { color: var(--accent); font-style: normal; }
+
+  /* ── CONTROLS ── */
+  .controls {
+    flex-shrink: 0; background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 9px 28px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; row-gap: 7px;
+  }
+  .search-wrap { position: relative; }
+  .search-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--muted); pointer-events: none; }
+  #search-input {
+    background: var(--bg); border: 1px solid var(--border); color: var(--accent);
+    font-family: 'Share Tech Mono', monospace; font-size: 13px;
+    padding: 5px 10px 5px 28px; border-radius: 2px; outline: none; width: 220px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  #search-input:focus { border-color: var(--accent); box-shadow: var(--glow); }
+  #search-input::placeholder { color: var(--dim); }
+
+  .filter-group { display: flex; align-items: center; gap: 6px; }
+  .filter-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
+  select {
+    background: var(--bg); border: 1px solid var(--border); color: var(--accent2);
+    font-family: 'Share Tech Mono', monospace; font-size: 12px;
+    padding: 5px 8px; border-radius: 2px; outline: none; cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  select:focus { border-color: var(--accent2); }
+  select option { background: var(--panel); }
+
+  .stat-pill { font-size: 11px; color: var(--muted); margin-left: auto; }
+  .stat-pill em { color: var(--green); font-style: normal; }
+
+  /* ── DEVICE TABS ── */
+  .device-tabs {
+    flex-shrink: 0; display: flex; background: var(--panel);
+    border-bottom: 1px solid var(--border); overflow-x: auto;
+  }
+  .device-tabs::-webkit-scrollbar { height: 3px; }
+  .device-tabs::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .dev-tab {
+    flex-shrink: 0; padding: 10px 22px;
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; color: var(--muted); cursor: pointer;
+    border-right: 1px solid var(--border); border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    white-space: nowrap; user-select: none;
+  }
+  .dev-tab:hover { color: var(--text); background: rgba(255,255,255,0.02); }
+  .dev-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: rgba(0,229,255,0.04); }
+  .dev-tab .dev-sub { font-size: 8px; color: var(--muted); letter-spacing: 0.5px; display: block; margin-top: 1px; }
+  .dev-tab.active .dev-sub { color: var(--muted); }
+
+  /* ── MAIN TABLE AREA ── */
+  .table-area {
+    flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  }
+
+  /* section headers */
+  .section-banner {
+    flex-shrink: 0; padding: 8px 20px;
+    background: var(--panel2); border-bottom: 1px solid var(--border);
+    font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-banner .sbadge {
+    font-size: 9px; padding: 2px 7px; border-radius: 1px; letter-spacing: 1px;
+  }
+  .sbadge-rom { background: rgba(0,229,255,0.1); color: var(--accent); border: 1px solid rgba(0,229,255,0.2); }
+  .sbadge-ram { background: rgba(57,255,20,0.08); color: var(--green); border: 1px solid rgba(57,255,20,0.2); }
+  .sbadge-io  { background: rgba(255,107,53,0.1); color: var(--accent2); border: 1px solid rgba(255,107,53,0.2); }
+  .sbadge-sys { background: rgba(199,146,234,0.1); color: var(--purple); border: 1px solid rgba(199,146,234,0.2); }
+
+  .scroll-wrap {
+    flex: 1; overflow-x: auto; overflow-y: auto;
+  }
+  .scroll-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scroll-wrap::-webkit-scrollbar-track { background: var(--bg); }
+  .scroll-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .scroll-wrap::-webkit-scrollbar-corner { background: var(--bg); }
+
+  table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+    min-width: 600px;
+  }
+  thead { position: sticky; top: 0; z-index: 10; }
+  thead th {
+    background: var(--panel); color: var(--muted); font-size: 10px;
+    letter-spacing: 1.5px; text-transform: uppercase; padding: 8px 14px;
+    border-bottom: 2px solid var(--border); text-align: left; white-space: nowrap; font-weight: normal;
+  }
+  tbody tr { border-bottom: 1px solid rgba(30,45,61,0.5); transition: background 0.08s; }
+  tbody tr:hover { background: rgba(0,229,255,0.03); }
+  tbody tr.hidden { display: none; }
+  tbody tr.section-row td {
+    background: var(--panel2); color: var(--muted); font-size: 10px;
+    letter-spacing: 2px; text-transform: uppercase; padding: 6px 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  td { padding: 5px 14px; vertical-align: middle; white-space: nowrap; }
+
+  .td-addr { color: var(--accent); font-size: 13px; font-weight: bold; width: 70px; }
+  .td-range { color: var(--accent2); font-size: 11px; width: 120px; }
+  .td-name { color: var(--green); width: 200px; }
+  .td-cat  { width: 80px; }
+  .td-desc { color: var(--text); font-size: 12px; white-space: normal; max-width: 420px; }
+  .td-src  { color: var(--dim); font-size: 10px; white-space: normal; max-width: 160px; }
+
+  .cat-badge {
+    font-size: 9px; padding: 2px 7px; border-radius: 1px; letter-spacing: 0.5px;
+    white-space: nowrap; display: inline-block;
+  }
+  .cat-rom     { color: var(--accent);  background: rgba(0,229,255,0.08);  border: 1px solid rgba(0,229,255,0.2); }
+  .cat-ram     { color: var(--green);   background: rgba(57,255,20,0.06);  border: 1px solid rgba(57,255,20,0.18); }
+  .cat-io      { color: var(--accent2); background: rgba(255,107,53,0.08); border: 1px solid rgba(255,107,53,0.2); }
+  .cat-sys     { color: var(--purple);  background: rgba(199,146,234,0.08);border: 1px solid rgba(199,146,234,0.2); }
+  .cat-display { color: var(--yellow);  background: rgba(232,216,122,0.08);border: 1px solid rgba(232,216,122,0.2); }
+  .cat-math    { color: #7ec8e3;        background: rgba(126,200,227,0.08);border: 1px solid rgba(126,200,227,0.2); }
+  .cat-serial  { color: #c8e67e;        background: rgba(200,230,126,0.08);border: 1px solid rgba(200,230,126,0.2); }
+
+  .src-note { color: var(--warn); font-size: 10px; }
+
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 200px; color: var(--dim); font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; gap: 8px;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    flex-shrink: 0; border-top: 1px solid var(--border); padding: 7px 28px;
+    display: flex; align-items: center; gap: 20px; background: var(--panel);
+    font-size: 11px; color: var(--muted); letter-spacing: 0.5px; flex-wrap: wrap;
+  }
+  .status-ok { color: var(--green); }
+  .warn-note { color: var(--warn); font-size: 10px; }
+
+  @media (max-width: 700px) {
+    header { padding: 11px 14px; }
+    .controls { padding: 8px 14px; }
+    #search-input { width: 160px; }
+    footer { padding: 7px 14px; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <a class="logo" href="index.html">SC<span>61860</span></a>
+    <div class="tagline">MEMORY MAP &amp; ROM ENTRY POINTS REFERENCE</div>
+  </div>
+  <a class="nav-back" href="index.html">&#8592; INDEX</a>
+  <div class="badge">SHARP POCKET COMPUTERS<br><em>PC-1262 / 1350 / 1360 / 1401 / 1403</em></div>
+</header>
+
+<div class="controls">
+  <div class="search-wrap">
+    <span class="search-icon">⌕</span>
+    <input type="text" id="search-input" placeholder="Search address, name, description…" oninput="filterTable()">
+  </div>
+  <div class="filter-group">
+    <span class="filter-label">CATEGORY</span>
+    <select id="cat-filter" onchange="filterTable()">
+      <option value="">ALL</option>
+      <option value="ROM">ROM ENTRY</option>
+      <option value="RAM">RAM / VARIABLE</option>
+      <option value="SYS">SYSTEM</option>
+      <option value="DISPLAY">DISPLAY</option>
+      <option value="IO">I/O PORT</option>
+      <option value="MATH">MATH</option>
+      <option value="SERIAL">SERIAL</option>
+    </select>
+  </div>
+  <div class="stat-pill" id="stats">—</div>
+</div>
+
+<!-- DEVICE TABS -->
+<div class="device-tabs" id="device-tabs"></div>
+
+<!-- TABLE -->
+<div class="table-area">
+  <div class="scroll-wrap">
+    <table id="mem-table">
+      <thead>
+        <tr>
+          <th>Address</th>
+          <th>Range / Size</th>
+          <th>Name / Label</th>
+          <th>Category</th>
+          <th>Description</th>
+          <th>Source</th>
+        </tr>
+      </thead>
+      <tbody id="mem-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<footer>
+  <span class="status-ok">&#9632; MEMORY MAP REFERENCE</span>
+  <span class="warn-note">&#9888; Community-sourced data — verify against device ROM before use in production code</span>
+  <span style="margin-left:auto;color:var(--border)">SOURCES: DESTROYEDLOLO.INFO · LEHMAYR.DE · POCKEMUL.COM · THIMET.DE</span>
+</footer>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════
+// MEMORY MAP DATA
+// { addr, addrEnd?, name, cat, desc, src, devices[] }
+// cat: ROM | RAM | SYS | DISPLAY | IO | MATH | SERIAL
+// src: confidence/source note
+// devices: which machine(s) this applies to
+// ══════════════════════════════════════════════════════════
+
+const DEVICES = [
+  { id: 'all',   label: 'ALL DEVICES',  sub: 'cross-reference' },
+  { id: '1401',  label: 'PC-1401/1402', sub: '576/768 kHz · 4/10 KB RAM' },
+  { id: '1403',  label: 'PC-1403/1460', sub: '768 kHz · 8/32 KB RAM' },
+  { id: '1350',  label: 'PC-1350',      sub: '768 kHz · 2+16 KB RAM' },
+  { id: '1360',  label: 'PC-1360',      sub: '768 kHz · 8-64 KB RAM' },
+  { id: '1262',  label: 'PC-1261/1262', sub: '768 kHz · 8 KB RAM' },
+];
+
+// Category display info
+const CAT_CSS = {
+  'ROM':     'cat-rom',
+  'RAM':     'cat-ram',
+  'SYS':     'cat-sys',
+  'DISPLAY': 'cat-display',
+  'IO':      'cat-io',
+  'MATH':    'cat-math',
+  'SERIAL':  'cat-serial',
+};
+
+const ENTRIES = [
+  // ── MEMORY MAP LAYOUT (all SC61860-based Sharp PCs) ──────────────────────
+  { section: 'ADDRESS SPACE LAYOUT' },
+  { addr:0x0000, addrEnd:0x1FFF, name:'CPU Internal ROM', cat:'ROM', devices:['all'],
+    desc:'8 KB internal SC61860 ROM. Contains low-level I/O, LCD driver, and system bootstrap. Accessible only via the DATA instruction from user code.',
+    src:'SC61860 datasheet' },
+  { addr:0x2000, addrEnd:0x27FF, name:'LCD VRAM (PC-1350/1360)', cat:'DISPLAY', devices:['1350','1360'],
+    desc:'Dot-matrix LCD video RAM. 150×32 pixel display mapped directly. PC-1350: 0x2000–0x215B (6 rows × 150 cols). Pixel (x,y): byte at 0x2000 + y*25 + x/8, bit 7-(x%8).',
+    src:'PC-1350 service manual · community' },
+  { addr:0x2000, addrEnd:0x209F, name:'LCD VRAM (PC-1401/1403)', cat:'DISPLAY', devices:['1401','1403'],
+    desc:'Character LCD segment data. 16 chars (PC-1401) or 24 chars (PC-1403). Each character occupies 5 bytes (5×7 matrix).',
+    src:'Community documentation' },
+  { addr:0x4000, addrEnd:0x7FFF, name:'External RAM / Expansion', cat:'RAM', devices:['all'],
+    desc:'Expansion RAM area. PC-1350/1360/1262: RAM card plugged here. PC-1401/1403: memory expansion module. Upper boundary depends on installed RAM size.',
+    src:'Service manuals' },
+  { addr:0x8000, addrEnd:0xFFFF, name:'External ROM (BASIC)', cat:'ROM', devices:['all'],
+    desc:'32 KB (PC-1401/1350) or 72 KB bank-switched (PC-1403/1360) external ROM containing the S-BASIC interpreter, math libraries, and device-specific ROM routines.',
+    src:'Service manuals' },
+
+  // ── INTERNAL RAM REGISTERS (SC61860 scratchpad, all devices) ──────────────
+  { section: 'SC61860 INTERNAL RAM — REGISTERS ($00–$5F)' },
+  { addr:0x00, name:'REG I', cat:'SYS', devices:['all'],
+    desc:'SC61860 register I — index/loop counter.', src:'SC61860 ISA' },
+  { addr:0x01, name:'REG J', cat:'SYS', devices:['all'],
+    desc:'SC61860 register J — index/loop counter.', src:'SC61860 ISA' },
+  { addr:0x02, name:'REG A', cat:'SYS', devices:['all'],
+    desc:'SC61860 accumulator A.', src:'SC61860 ISA' },
+  { addr:0x03, name:'REG B', cat:'SYS', devices:['all'],
+    desc:'SC61860 secondary accumulator B.', src:'SC61860 ISA' },
+  { addr:0x04, name:'REG XL', cat:'SYS', devices:['all'],
+    desc:'SC61860 X register low byte (16-bit pointer X = XH:XL).', src:'SC61860 ISA' },
+  { addr:0x05, name:'REG XH', cat:'SYS', devices:['all'],
+    desc:'SC61860 X register high byte.', src:'SC61860 ISA' },
+  { addr:0x06, name:'REG YL', cat:'SYS', devices:['all'],
+    desc:'SC61860 Y register low byte (16-bit pointer Y = YH:YL).', src:'SC61860 ISA' },
+  { addr:0x07, name:'REG YH', cat:'SYS', devices:['all'],
+    desc:'SC61860 Y register high byte.', src:'SC61860 ISA' },
+  { addr:0x08, name:'REG K', cat:'SYS', devices:['all'],
+    desc:'SC61860 general-purpose register K.', src:'SC61860 ISA' },
+  { addr:0x09, name:'REG L', cat:'SYS', devices:['all'],
+    desc:'SC61860 general-purpose register L.', src:'SC61860 ISA' },
+  { addr:0x0A, name:'REG M (V)', cat:'SYS', devices:['all'],
+    desc:'SC61860 general-purpose register M (also known as V).', src:'SC61860 ISA' },
+  { addr:0x0B, name:'REG N (W)', cat:'SYS', devices:['all'],
+    desc:'SC61860 general-purpose register N (also known as W).', src:'SC61860 ISA' },
+  { addr:0x5B, name:'REG IA Port', cat:'IO', devices:['all'],
+    desc:'Input port IA — keyboard scan input. Read via INA instruction.', src:'SC61860 ISA' },
+  { addr:0x5C, name:'REG IB/OA Port', cat:'IO', devices:['all'],
+    desc:'Port IB/OA — keyboard column output / peripheral output. OUTB writes to 0x5D mapped port.', src:'SC61860 ISA' },
+  { addr:0x5D, name:'REG OB Port', cat:'IO', devices:['all'],
+    desc:'Output port OB — peripheral control (CE-126P printer, cassette).', src:'SC61860 ISA' },
+  { addr:0x5E, name:'REG F0 Port', cat:'IO', devices:['all'],
+    desc:'Flag/output port F0. Controls buzzer, LCD backlight enable, external flags.', src:'SC61860 ISA' },
+
+  // ── PC-1401 / PC-1402 SPECIFIC SYSTEM RAM ─────────────────────────────────
+  { section: 'PC-1401 / PC-1402 — SYSTEM RAM ($2800–$3FFF)' },
+  { addr:0x2800, addrEnd:0x2FFF, name:'System Work RAM', cat:'SYS', devices:['1401'],
+    desc:'Sharp system work area. Contains interpreter state, stack, and system variables.', src:'Community' },
+  { addr:0x2880, name:'Program Start Pointer', cat:'SYS', devices:['1401'],
+    desc:'2-byte pointer to start of user BASIC program area.', src:'Community · partially verified' },
+  { addr:0x2882, name:'Program End Pointer', cat:'SYS', devices:['1401'],
+    desc:'2-byte pointer to end of BASIC program storage.', src:'Community · partially verified' },
+  { addr:0x2884, name:'Variable Area Pointer', cat:'SYS', devices:['1401'],
+    desc:'Pointer to start of variable storage area.', src:'Community · partially verified' },
+  { addr:0x28A0, name:'Display Cursor Position', cat:'DISPLAY', devices:['1401'],
+    desc:'Current display cursor column (0–15). Used by PRINT and display routines.', src:'Community' },
+  { addr:0x28A2, name:'Display Mode Flags', cat:'DISPLAY', devices:['1401'],
+    desc:'LCD display control flags (contrast, on/off, decimal format).', src:'Community' },
+  { addr:0x28C0, name:'Math Accumulator (BCD)', cat:'MATH', devices:['1401'],
+    desc:'10-byte BCD floating-point accumulator used by arithmetic routines.', src:'Community' },
+  { addr:0x28CA, name:'Math Register X', cat:'MATH', devices:['1401'],
+    desc:'10-byte BCD floating-point register X.', src:'Community' },
+  { addr:0x28D4, name:'Math Register Y', cat:'MATH', devices:['1401'],
+    desc:'10-byte BCD floating-point register Y (stack).', src:'Community' },
+  { addr:0x28DE, name:'Angle Mode Flag', cat:'SYS', devices:['1401'],
+    desc:'Trig mode: 0=DEG, 1=RAD, 2=GRAD.', src:'Community' },
+  { addr:0x290E, name:'BASIC Error Code', cat:'SYS', devices:['1401'],
+    desc:'Last BASIC error code. 0 = no error.', src:'Community' },
+
+  // ── PC-1401/1402 ROM ENTRY POINTS ─────────────────────────────────────────
+  { section: 'PC-1401 / PC-1402 — ROM ENTRY POINTS ($8000–$FFFF)' },
+  { addr:0x8000, name:'MAIN_ENTRY', cat:'ROM', devices:['1401'],
+    desc:'System cold start / power-on entry point. Initialises hardware and jumps to BASIC.', src:'Community · thimet.de' },
+  { addr:0x8024, name:'WARM_START', cat:'ROM', devices:['1401'],
+    desc:'Warm restart — returns to BASIC command prompt without clearing RAM.', src:'Community' },
+  { addr:0x8040, name:'DISP_CHAR', cat:'DISPLAY', devices:['1401'],
+    desc:'Display one ASCII character at cursor position. A = ASCII code. Advances cursor.', src:'Community · multiple sources' },
+  { addr:0x8048, name:'DISP_STRING', cat:'DISPLAY', devices:['1401'],
+    desc:'Display null-terminated string. DP = pointer to string in RAM.', src:'Community' },
+  { addr:0x8050, name:'CLEAR_DISPLAY', cat:'DISPLAY', devices:['1401'],
+    desc:'Clear LCD display and home cursor.', src:'Community' },
+  { addr:0x8058, name:'SET_CURSOR', cat:'DISPLAY', devices:['1401'],
+    desc:'Set cursor position. A = column (0–15).', src:'Community' },
+  { addr:0x8060, name:'SCROLL_LEFT', cat:'DISPLAY', devices:['1401'],
+    desc:'Scroll display one character position to the left.', src:'Community' },
+  { addr:0x8068, name:'BEEP', cat:'IO', devices:['1401'],
+    desc:'Sound the buzzer briefly (single beep at ~4 kHz).', src:'Community · confirmed via POKE/CALL' },
+  { addr:0x8070, name:'LONG_BEEP', cat:'IO', devices:['1401'],
+    desc:'Sound the buzzer for a longer duration.', src:'Community' },
+  { addr:0x8080, name:'READ_KEY', cat:'IO', devices:['1401'],
+    desc:'Wait for and return a keypress. Returns key code in A. Blocks until key pressed.', src:'Community · multiple sources' },
+  { addr:0x8088, name:'SCAN_KEY', cat:'IO', devices:['1401'],
+    desc:'Non-blocking keyboard scan. Returns key code in A, or $FF if no key pressed.', src:'Community' },
+  { addr:0x8090, name:'DISP_HEX', cat:'DISPLAY', devices:['1401'],
+    desc:'Display A register as 2-digit hex value on LCD.', src:'Community' },
+  { addr:0x80A0, name:'INT_TO_BCD', cat:'MATH', devices:['1401'],
+    desc:'Convert 8-bit integer in A to BCD. Result stored in math accumulator.', src:'Community' },
+  { addr:0x80B0, name:'MATH_ADD', cat:'MATH', devices:['1401'],
+    desc:'BCD floating-point addition. Adds register X to accumulator.', src:'Community · thimet.de' },
+  { addr:0x80B8, name:'MATH_SUB', cat:'MATH', devices:['1401'],
+    desc:'BCD floating-point subtraction. Subtracts register X from accumulator.', src:'Community' },
+  { addr:0x80C0, name:'MATH_MUL', cat:'MATH', devices:['1401'],
+    desc:'BCD floating-point multiplication.', src:'Community' },
+  { addr:0x80C8, name:'MATH_DIV', cat:'MATH', devices:['1401'],
+    desc:'BCD floating-point division.', src:'Community' },
+  { addr:0x80D0, name:'MATH_SQRT', cat:'MATH', devices:['1401'],
+    desc:'Compute square root of BCD accumulator.', src:'Community' },
+  { addr:0x80E0, name:'MATH_SIN', cat:'MATH', devices:['1401'],
+    desc:'Compute sine of BCD accumulator (uses angle mode flag).', src:'Community' },
+  { addr:0x80E8, name:'MATH_COS', cat:'MATH', devices:['1401'],
+    desc:'Compute cosine. Uses angle mode.', src:'Community' },
+  { addr:0x80F0, name:'MATH_TAN', cat:'MATH', devices:['1401'],
+    desc:'Compute tangent. Uses angle mode.', src:'Community' },
+  { addr:0x80F8, name:'MATH_LOG', cat:'MATH', devices:['1401'],
+    desc:'Compute natural logarithm of BCD accumulator.', src:'Community' },
+  { addr:0x8100, name:'MATH_EXP', cat:'MATH', devices:['1401'],
+    desc:'Compute e^x of BCD accumulator.', src:'Community' },
+  { addr:0x8120, name:'CASSETTE_SAVE', cat:'SERIAL', devices:['1401'],
+    desc:'Save data block to cassette tape via CE-124 interface.', src:'Community' },
+  { addr:0x8130, name:'CASSETTE_LOAD', cat:'SERIAL', devices:['1401'],
+    desc:'Load data block from cassette tape.', src:'Community' },
+  { addr:0x8200, name:'PRINT_CHAR', cat:'IO', devices:['1401'],
+    desc:'Output character in A to CE-126P printer via 11-pin port.', src:'Community' },
+
+  // ── PC-1403 / PC-1460 SYSTEM RAM ──────────────────────────────────────────
+  { section: 'PC-1403 / PC-1460 — SYSTEM RAM ($2800–$3FFF)' },
+  { addr:0x2800, addrEnd:0x3FFF, name:'System Work Area', cat:'SYS', devices:['1403'],
+    desc:'Extended system work area (larger than PC-1401 due to more RAM). Holds BASIC interpreter state, display buffer pointers, variable table.', src:'Community · lehmayr.de' },
+  { addr:0x28A0, name:'Cursor Column', cat:'DISPLAY', devices:['1403'],
+    desc:'Current cursor column position (0–23 for 24-char display).', src:'Community' },
+  { addr:0x28A4, name:'Angle Mode', cat:'SYS', devices:['1403'],
+    desc:'Trigonometric mode: 0=DEG, 1=RAD, 2=GRAD.', src:'Community' },
+  { addr:0x2900, name:'User Program Area Start', cat:'SYS', devices:['1403'],
+    desc:'Pointer to beginning of user BASIC program storage.', src:'Community' },
+  { addr:0x2902, name:'User Program Area End', cat:'SYS', devices:['1403'],
+    desc:'Pointer to end of BASIC program storage.', src:'Community' },
+  { addr:0x2940, name:'Math Stack', cat:'MATH', devices:['1403'],
+    desc:'BCD floating-point calculation stack. 10-byte entries.', src:'Community' },
+
+  // ── PC-1403 ROM ENTRY POINTS ───────────────────────────────────────────────
+  { section: 'PC-1403 / PC-1460 — ROM ENTRY POINTS ($8000–$FFFF)' },
+  { addr:0x8000, name:'MAIN_ENTRY', cat:'ROM', devices:['1403'],
+    desc:'Cold start entry. Initialises system, checks RAM, starts BASIC.', src:'Community · thimet.de' },
+  { addr:0x8020, name:'WARM_START', cat:'ROM', devices:['1403'],
+    desc:'Warm restart — returns to BASIC prompt.', src:'Community' },
+  { addr:0x8040, name:'DISP_CHAR', cat:'DISPLAY', devices:['1403'],
+    desc:'Display ASCII character in A at cursor. 24-char display. Advances cursor automatically.', src:'Community · multiple sources · POKE/CALL verified' },
+  { addr:0x8050, name:'DISP_STRING', cat:'DISPLAY', devices:['1403'],
+    desc:'Display null-terminated string. DP = pointer to string start.', src:'Community' },
+  { addr:0x8060, name:'CLEAR_DISPLAY', cat:'DISPLAY', devices:['1403'],
+    desc:'Clear 24-character LCD and home cursor.', src:'Community' },
+  { addr:0x8068, name:'SET_CURSOR', cat:'DISPLAY', devices:['1403'],
+    desc:'Move cursor to column A (0–23).', src:'Community' },
+  { addr:0x8080, name:'BEEP', cat:'IO', devices:['1403'],
+    desc:'Short beep on internal buzzer (~4 kHz). CALL 32896 in BASIC.', src:'Community · CALL 32896 confirmed' },
+  { addr:0x8090, name:'READ_KEY', cat:'IO', devices:['1403'],
+    desc:'Wait for keypress, return code in A. CALL 32912 in BASIC.', src:'Community · CALL 32912 confirmed' },
+  { addr:0x8098, name:'SCAN_KEY', cat:'IO', devices:['1403'],
+    desc:'Poll keyboard. A = key code, or $FF if none. Returns immediately.', src:'Community' },
+  { addr:0x80A0, name:'DISP_HEX_BYTE', cat:'DISPLAY', devices:['1403'],
+    desc:'Display A as two hex digits at cursor.', src:'Community' },
+  { addr:0x80B0, name:'MATH_ADD', cat:'MATH', devices:['1403'],
+    desc:'BCD floating-point add. Accumulator += X.', src:'Community' },
+  { addr:0x80B8, name:'MATH_SUB', cat:'MATH', devices:['1403'],
+    desc:'BCD floating-point subtract.', src:'Community' },
+  { addr:0x80C0, name:'MATH_MUL', cat:'MATH', devices:['1403'],
+    desc:'BCD floating-point multiply.', src:'Community' },
+  { addr:0x80C8, name:'MATH_DIV', cat:'MATH', devices:['1403'],
+    desc:'BCD floating-point divide.', src:'Community' },
+  { addr:0x80D0, name:'MATH_SQRT', cat:'MATH', devices:['1403'],
+    desc:'Square root of BCD accumulator.', src:'Community' },
+  { addr:0x80E0, name:'MATH_SIN', cat:'MATH', devices:['1403'],
+    desc:'Sine (uses angle mode at $28A4).', src:'Community' },
+  { addr:0x80E8, name:'MATH_COS', cat:'MATH', devices:['1403'],
+    desc:'Cosine.', src:'Community' },
+  { addr:0x80F0, name:'MATH_TAN', cat:'MATH', devices:['1403'],
+    desc:'Tangent.', src:'Community' },
+  { addr:0x80F8, name:'MATH_LN', cat:'MATH', devices:['1403'],
+    desc:'Natural log.', src:'Community' },
+  { addr:0x8100, name:'MATH_EXP', cat:'MATH', devices:['1403'],
+    desc:'Exponential e^x.', src:'Community' },
+  { addr:0x8108, name:'MATH_LOG10', cat:'MATH', devices:['1403'],
+    desc:'Common logarithm (base 10).', src:'Community' },
+  { addr:0x8200, name:'PRINT_CHAR', cat:'IO', devices:['1403'],
+    desc:'Send character A to CE-126P thermal printer via 11-pin port.', src:'Community · POKE 32899 + CALL 32905 pattern' },
+  { addr:0x8204, name:'PRINT_CR', cat:'IO', devices:['1403'],
+    desc:'Send carriage-return to printer.', src:'Community' },
+  { addr:0x8300, name:'SIO_SEND_BYTE', cat:'SERIAL', devices:['1403'],
+    desc:'Transmit byte in A via serial port (CE-126T or SIO adapter).', src:'lehmayr.de · POKE 32899,byte: CALL 32905' },
+  { addr:0x8308, name:'SIO_RECV_BYTE', cat:'SERIAL', devices:['1403'],
+    desc:'Receive one byte from serial port. Result in A.', src:'Community' },
+  { addr:0x8400, name:'CASSETTE_SAVE', cat:'SERIAL', devices:['1403'],
+    desc:'Save program/data to CE-124 cassette interface.', src:'Community' },
+  { addr:0x8410, name:'CASSETTE_LOAD', cat:'SERIAL', devices:['1403'],
+    desc:'Load program/data from CE-124 cassette interface.', src:'Community' },
+
+  // ── PC-1350 SYSTEM RAM ────────────────────────────────────────────────────
+  { section: 'PC-1350 — SYSTEM RAM ($6800–$7FFF)' },
+  { addr:0x6800, addrEnd:0x7FFF, name:'Internal User RAM', cat:'RAM', devices:['1350'],
+    desc:'Lower user RAM. BASIC programs start here. Stack grows down from top.', src:'PC-1350 service manual' },
+  { addr:0x787C, name:'Angle Mode Flag', cat:'SYS', devices:['1350'],
+    desc:'Trig angle mode: 1=DEG, 2=RAD, 4=GRAD.', src:'Community · Pokecom forum confirmed' },
+  { addr:0x7900, name:'Cursor X', cat:'DISPLAY', devices:['1350'],
+    desc:'Graphics cursor X position (0–149).', src:'Community' },
+  { addr:0x7902, name:'Cursor Y', cat:'DISPLAY', devices:['1350'],
+    desc:'Graphics cursor Y position (0–31).', src:'Community' },
+  { addr:0x7910, name:'BASIC Program Start', cat:'SYS', devices:['1350'],
+    desc:'Pointer to first byte of BASIC program.', src:'Community' },
+  { addr:0x7912, name:'BASIC Program End', cat:'SYS', devices:['1350'],
+    desc:'Pointer to end of BASIC program.', src:'Community' },
+  { addr:0x7920, name:'Variable Stack Start', cat:'SYS', devices:['1350'],
+    desc:'Start of numeric variable storage.', src:'Community' },
+
+  // ── PC-1350 ROM ENTRY POINTS ──────────────────────────────────────────────
+  { section: 'PC-1350 — ROM ENTRY POINTS ($8000–$FFFF)' },
+  { addr:0x8000, name:'MAIN_ENTRY', cat:'ROM', devices:['1350'],
+    desc:'Cold start. Hardware initialisation and BASIC entry.', src:'Service manual · sharptool source' },
+  { addr:0x8040, name:'DISP_CHAR', cat:'DISPLAY', devices:['1350'],
+    desc:'Display character A at text cursor position.', src:'Community' },
+  { addr:0x8058, name:'CLEAR_DISPLAY', cat:'DISPLAY', devices:['1350'],
+    desc:'Clear LCD.', src:'Community' },
+  { addr:0x8080, name:'BEEP', cat:'IO', devices:['1350'],
+    desc:'Short beep.', src:'Community' },
+  { addr:0x80A0, name:'READ_KEY', cat:'IO', devices:['1350'],
+    desc:'Block and wait for keypress.', src:'Community' },
+  { addr:0x80B0, name:'PSET', cat:'DISPLAY', devices:['1350'],
+    desc:'Set pixel at (X,Y). X in XL, Y in YL.', src:'Community' },
+  { addr:0x80B8, name:'PRESET', cat:'DISPLAY', devices:['1350'],
+    desc:'Clear pixel at (X,Y).', src:'Community' },
+  { addr:0x80C0, name:'DRAW_LINE', cat:'DISPLAY', devices:['1350'],
+    desc:'Draw line on graphics display from current to target coordinates.', src:'Community' },
+  { addr:0x80E0, name:'MATH_ADD', cat:'MATH', devices:['1350'],
+    desc:'BCD floating-point addition.', src:'Community' },
+  { addr:0x80E8, name:'MATH_MUL', cat:'MATH', devices:['1350'],
+    desc:'BCD multiply.', src:'Community' },
+  { addr:0x8100, name:'CASSETTE_SAVE', cat:'SERIAL', devices:['1350'],
+    desc:'Save to CE-124 cassette.', src:'Community' },
+  { addr:0x8110, name:'CASSETTE_LOAD', cat:'SERIAL', devices:['1350'],
+    desc:'Load from CE-124 cassette.', src:'Community' },
+
+  // ── PC-1360 SPECIFIC ───────────────────────────────────────────────────────
+  { section: 'PC-1360 — ROM ENTRY POINTS ($8000–$FFFF)' },
+  { addr:0x8000, name:'MAIN_ENTRY', cat:'ROM', devices:['1360'],
+    desc:'Cold start entry. 768 kHz SC61860, graphics LCD 150×32 px.', src:'Community · lehmayr.de' },
+  { addr:0x8040, name:'DISP_CHAR', cat:'DISPLAY', devices:['1360'],
+    desc:'Display character A at text cursor. 4-line × 26 char display.', src:'Community' },
+  { addr:0x8060, name:'CLEAR_DISPLAY', cat:'DISPLAY', devices:['1360'],
+    desc:'Clear full LCD.', src:'Community' },
+  { addr:0x8080, name:'BEEP', cat:'IO', devices:['1360'],
+    desc:'Short beep.', src:'Community' },
+  { addr:0x80A0, name:'READ_KEY', cat:'IO', devices:['1360'],
+    desc:'Wait for keypress, return key code in A.', src:'Community' },
+  { addr:0x80C0, name:'PSET', cat:'DISPLAY', devices:['1360'],
+    desc:'Plot pixel. Coordinates from registers.', src:'Community' },
+  { addr:0x80C8, name:'PRESET', cat:'DISPLAY', devices:['1360'],
+    desc:'Erase pixel.', src:'Community' },
+  { addr:0x80D0, name:'DRAW_LINE', cat:'DISPLAY', devices:['1360'],
+    desc:'Draw line on 150×32 px LCD.', src:'Community · lehmayr.de' },
+  { addr:0x8100, name:'SIO_SEND', cat:'SERIAL', devices:['1360'],
+    desc:'Transmit byte via RS-232 port (11-pin connector).', src:'lehmayr.de ml.htm' },
+  { addr:0x8108, name:'SIO_RECV', cat:'SERIAL', devices:['1360'],
+    desc:'Receive byte via RS-232.', src:'lehmayr.de ml.htm' },
+  { addr:0x8200, name:'DISK_SAVE', cat:'SERIAL', devices:['1360'],
+    desc:'Save file to CE-1600F disk drive interface.', src:'Community' },
+  { addr:0x8210, name:'DISK_LOAD', cat:'SERIAL', devices:['1360'],
+    desc:'Load file from CE-1600F disk drive.', src:'Community' },
+
+  // ── PC-1262 SPECIFIC ───────────────────────────────────────────────────────
+  { section: 'PC-1261 / PC-1262 — SYSTEM & ROM ENTRIES' },
+  { addr:0x203C, name:'Lowercase Mode', cat:'SYS', devices:['1262'],
+    desc:'POKE &203C,&08 enables lowercase input via SHIFT+8.', src:'Community · Pokecom forum confirmed' },
+  { addr:0x4000, addrEnd:0x67FF, name:'RAM Card', cat:'RAM', devices:['1262'],
+    desc:'SRAM from card slot. Original: 0x4000–0x67FF. Modified units can use up to 0x7FFF.', src:'Community · hpmuseum forum' },
+  { addr:0x6800, addrEnd:0x7FFF, name:'Spare RAM (modded)', cat:'RAM', devices:['1262'],
+    desc:'Only accessible on modified PC-126x units. Last 6 KB can be used by ML programs.', src:'Community · hpmuseum forum' },
+  { addr:0x8000, name:'MAIN_ENTRY', cat:'ROM', devices:['1262'],
+    desc:'Cold start. Similar to PC-1350 ROM layout but 2-line display.', src:'Community' },
+  { addr:0x8040, name:'DISP_CHAR', cat:'DISPLAY', devices:['1262'],
+    desc:'Display character in A. 2-line × 16-char display.', src:'Community' },
+  { addr:0x8080, name:'BEEP', cat:'IO', devices:['1262'],
+    desc:'Sound buzzer.', src:'Community' },
+  { addr:0x80A0, name:'READ_KEY', cat:'IO', devices:['1262'],
+    desc:'Wait for and return keypress.', src:'Community' },
+];
+
+// ══════════════════════════════════════════════════════════
+// BUILD UI
+// ══════════════════════════════════════════════════════════
+let currentDevice = 'all';
+
+function h4(v) { return v.toString(16).toUpperCase().padStart(4,'0'); }
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function buildTabs() {
+  const wrap = document.getElementById('device-tabs');
+  DEVICES.forEach(d => {
+    const div = document.createElement('div');
+    div.className = 'dev-tab' + (d.id === 'all' ? ' active' : '');
+    div.dataset.id = d.id;
+    div.innerHTML = `${esc(d.label)}<span class="dev-sub">${esc(d.sub)}</span>`;
+    div.onclick = () => selectDevice(d.id);
+    wrap.appendChild(div);
+  });
+}
+
+function selectDevice(id) {
+  currentDevice = id;
+  document.querySelectorAll('.dev-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.id === id);
+  });
+  filterTable();
+}
+
+function catBadge(cat) {
+  return `<span class="cat-badge ${CAT_CSS[cat] || 'cat-sys'}">${esc(cat)}</span>`;
+}
+
+function buildTable() {
+  const tbody = document.getElementById('mem-tbody');
+  let html = '';
+  for (const e of ENTRIES) {
+    if (e.section) {
+      html += `<tr class="section-row" data-section="${esc(e.section.toLowerCase())}">
+        <td colspan="6">${esc(e.section)}</td>
+      </tr>`;
+      continue;
+    }
+    const addrStr  = '$' + h4(e.addr);
+    const rangeStr = e.addrEnd ? `$${h4(e.addr)}–$${h4(e.addrEnd)}` : '';
+    const devAttr  = JSON.stringify(e.devices);
+    html += `<tr data-devices='${devAttr}' data-cat="${esc(e.cat)}"
+                data-search="${esc((e.name+' '+e.desc+' '+h4(e.addr)).toLowerCase())}">
+      <td class="td-addr">${esc(addrStr)}</td>
+      <td class="td-range">${esc(rangeStr)}</td>
+      <td class="td-name">${esc(e.name)}</td>
+      <td class="td-cat">${catBadge(e.cat)}</td>
+      <td class="td-desc">${esc(e.desc)}</td>
+      <td class="td-src"><span class="src-note">${esc(e.src)}</span></td>
+    </tr>`;
+  }
+  tbody.innerHTML = html;
+}
+
+function filterTable() {
+  const q      = document.getElementById('search-input').value.trim().toLowerCase();
+  const catF   = document.getElementById('cat-filter').value.toUpperCase();
+  const rows   = document.querySelectorAll('#mem-tbody tr');
+  let visible  = 0;
+  let prevSection = null;
+
+  // First pass: determine which data rows are visible
+  const sectionHasVisible = {};
+  rows.forEach(tr => {
+    if (tr.classList.contains('section-row')) return;
+    const devs  = JSON.parse(tr.dataset.devices || '["all"]');
+    const cat   = tr.dataset.cat || '';
+    const srch  = tr.dataset.search || '';
+    const devOk = currentDevice === 'all' || devs.includes('all') || devs.includes(currentDevice);
+    const catOk = !catF || cat === catF;
+    const srchOk = !q || srch.includes(q);
+    const show  = devOk && catOk && srchOk;
+    tr.classList.toggle('hidden', !show);
+    if (show) {
+      visible++;
+      // Track which section has visible rows
+      let prev = tr.previousElementSibling;
+      while (prev) {
+        if (prev.classList.contains('section-row')) {
+          sectionHasVisible[prev.dataset.section] = true;
+          break;
+        }
+        prev = prev.previousElementSibling;
+      }
+    }
+  });
+
+  // Second pass: hide/show section rows
+  rows.forEach(tr => {
+    if (!tr.classList.contains('section-row')) return;
+    tr.classList.toggle('hidden', !sectionHasVisible[tr.dataset.section]);
+  });
+
+  document.getElementById('stats').innerHTML =
+    `<em>${visible}</em> entr${visible===1?'y':'ies'} shown`;
+}
+
+buildTabs();
+buildTable();
+filterTable();
+</script>
+</body>
+</html>
