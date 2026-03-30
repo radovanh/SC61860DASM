@@ -876,7 +876,8 @@ function encodeInstr(mnem, operand, addr, symbols, lineNum, addError) {
     case 'rel': {
       if (operand === null) throw new Error(`${mnem} requires branch target`);
       const target = evalExpr(operand, symbols, addr) & 0xFFFF;
-      const instrEnd = (addr + 2) & 0xFFFF;
+      // SC61860 ISA: PC+1+n / PC+1-n  (PC points to operand byte during execution)
+      const instrEnd = (addr + 1) & 0xFFFF;
       let offset;
       if (def.dir === 'fwd') {
         offset = (target - instrEnd) & 0xFFFF;

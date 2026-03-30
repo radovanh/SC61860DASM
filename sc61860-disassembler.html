@@ -917,8 +917,9 @@ function disassembleBytes(bytes, org, bigEndian) {
         target = bigEndian ? ((b1<<8)|b2) : ((b2<<8)|b1);
         operand=`$${h4(target)}`; break;
       }
-      case 'rel+': target=(addr+2+(raw[1]??0))&0xFFFF; operand=`$${h4(target)}`; break;
-      case 'rel-': target=(addr+2-(raw[1]??0))&0xFFFF; operand=`$${h4(target)}`; break;
+      // SC61860 ISA: PC+1+n / PC+1-n  (PC points to operand byte, not past instruction)
+      case 'rel+': target=(addr+1+(raw[1]??0))&0xFFFF; operand=`$${h4(target)}`; break;
+      case 'rel-': target=(addr+1-(raw[1]??0))&0xFFFF; operand=`$${h4(target)}`; break;
       case 'cal':  target=((opcode&0x1F)<<8)|(raw[1]??0); operand=`$${h4(target)}`; break;
       case 'ptc': case 'dtc': operand=''; break;
     }
