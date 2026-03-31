@@ -311,6 +311,7 @@
   <div class="sep"></div>
 
   <button class="btn btn-primary" onclick="assemble()">&#9654;&nbsp;ASSEMBLE</button>
+  <button class="btn btn-secondary" onclick="triggerSourceOpen()">&#128194;&nbsp;LOAD</button>
   <button class="btn btn-secondary" onclick="loadSample()">SAMPLE</button>
   <button class="btn btn-danger" onclick="clearAll()">CLEAR</button>
   <div class="sep"></div>
@@ -326,6 +327,7 @@
       </div>
     </div>
   </div>
+  <input type="file" id="src-file-input" accept=".asm,.s,.txt,*" style="display:none" onchange="handleSourceLoad(this)">
 
   <div class="stat-pill" id="stats">READY</div>
 </div>
@@ -1255,6 +1257,44 @@ DATA_BUF:
 
 // initial line numbers
 updateLineNums();
+
+// ══════════════════════════════════════════════════════════
+// LOAD SOURCE FILE
+// ══════════════════════════════════════════════════════════
+function triggerSourceOpen() {
+  const fi = document.getElementById('src-file-input');
+  fi.value = '';
+  fi.click();
+}
+
+function handleSourceLoad(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    asmInput.value = e.target.result;
+    updateLineNums();
+    // Update pane header with filename
+    const short = file.name.length > 32 ? '…' + file.name.slice(-30) : file.name;
+    const header = document.querySelector('#pane-left .pane-header');
+    header.innerHTML =
+      `<div class="dot"></div>` +
+      `<span style="color:var(--accent2)">${escHtmlAsm(short)}</span>` +
+      `<span style="margin-left:auto;cursor:pointer;color:var(--muted);font-size:10px" ` +
+      `onclick="resetAsmPaneHeader()">✕ CLEAR</span>`;
+    assemble();
+  };
+  reader.readAsText(file);
+}
+
+function escHtmlAsm(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function resetAsmPaneHeader() {
+  document.querySelector('#pane-left .pane-header').innerHTML =
+    `<div class="dot"></div>ASSEMBLY SOURCE`;
+}
 
 // ══════════════════════════════════════════════════════════
 // DOWNLOAD
