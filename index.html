@@ -121,13 +121,16 @@
   .hero-sub em { color:var(--text); font-style:normal; }
 
   /* chip art */
-  .chip-art {
-    display:inline-block;
-    font-size:11px; line-height:1.45;
-    color:var(--border2); white-space:pre;
-    margin-bottom:40px;
-    font-family:'Share Tech Mono', monospace;
-    text-shadow: 0 0 8px rgba(0,229,255,0.15);
+  .chip-icon {
+    display: block;
+    margin: 0 auto 36px;
+    opacity: 0.85;
+    filter: drop-shadow(0 0 16px rgba(0,229,255,0.25));
+    animation: chipglow 3s ease-in-out infinite alternate;
+  }
+  @keyframes chipglow {
+    from { filter: drop-shadow(0 0 10px rgba(0,229,255,0.2)); }
+    to   { filter: drop-shadow(0 0 24px rgba(0,229,255,0.5)); }
   }
 
   /* ── TOOL CARDS ── */
@@ -269,39 +272,82 @@
 
 <section class="hero">
   <div class="hero-eyebrow">HITACHI ESR-H ARCHITECTURE</div>
+
+  <!-- SC61860 chip icon -->
+  <svg class="chip-icon" width="140" height="140" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg">
+    <!-- chip body -->
+    <rect x="35" y="35" width="70" height="70" rx="6" ry="6"
+          fill="#0f1319" stroke="#00e5ff" stroke-width="1.5"/>
+    <!-- inner die area -->
+    <rect x="45" y="45" width="50" height="50" rx="3" ry="3"
+          fill="#121820" stroke="#1e2d3d" stroke-width="1"/>
+    <!-- die grid lines -->
+    <line x1="58" y1="45" x2="58" y2="95" stroke="#1e2d3d" stroke-width="0.5"/>
+    <line x1="70" y1="45" x2="70" y2="95" stroke="#1e2d3d" stroke-width="0.5"/>
+    <line x1="82" y1="45" x2="82" y2="95" stroke="#1e2d3d" stroke-width="0.5"/>
+    <line x1="45" y1="58" x2="95" y2="58" stroke="#1e2d3d" stroke-width="0.5"/>
+    <line x1="45" y1="70" x2="95" y2="70" stroke="#1e2d3d" stroke-width="0.5"/>
+    <line x1="45" y1="82" x2="95" y2="82" stroke="#1e2d3d" stroke-width="0.5"/>
+    <!-- die blocks -->
+    <rect x="47" y="47" width="10" height="10" rx="1" fill="#1e2d3d" stroke="#00e5ff" stroke-width="0.5" opacity="0.8"/>
+    <rect x="65" y="47" width="16" height="16" rx="1" fill="#182030" stroke="#ff6b35" stroke-width="0.5" opacity="0.9"/>
+    <rect x="83" y="47" width="10" height="10" rx="1" fill="#1e2d3d" stroke="#00e5ff" stroke-width="0.5" opacity="0.8"/>
+    <rect x="47" y="65" width="16" height="16" rx="1" fill="#182030" stroke="#39ff14" stroke-width="0.5" opacity="0.9"/>
+    <rect x="47" y="83" width="10" height="10" rx="1" fill="#1e2d3d" stroke="#c792ea" stroke-width="0.5" opacity="0.8"/>
+    <rect x="83" y="65" width="10" height="22" rx="1" fill="#182030" stroke="#ff6b35" stroke-width="0.5" opacity="0.7"/>
+    <rect x="65" y="65" width="16" height="28" rx="1" fill="#1e2d3d" stroke="#00e5ff" stroke-width="0.5" opacity="0.6"/>
+    <!-- notch -->
+    <path d="M 35 54 A 5 5 0 0 1 35 46" fill="none" stroke="#00e5ff" stroke-width="1.5"/>
+    <!-- label -->
+    <text x="70" y="74" text-anchor="middle" font-family="monospace" font-size="6"
+          fill="#00e5ff" opacity="0.9" letter-spacing="1">SC61860</text>
+    <text x="70" y="82" text-anchor="middle" font-family="monospace" font-size="4.5"
+          fill="#5a7a8a" letter-spacing="0.5">ESR-H</text>
+    <!-- LEFT pins -->
+    <g stroke="#3a4a5a" stroke-width="1.5" stroke-linecap="round">
+      <line x1="20" y1="47" x2="35" y2="47"/><line x1="20" y1="53" x2="35" y2="53"/>
+      <line x1="20" y1="59" x2="35" y2="59"/><line x1="20" y1="65" x2="35" y2="65"/>
+      <line x1="20" y1="71" x2="35" y2="71"/><line x1="20" y1="77" x2="35" y2="77"/>
+      <line x1="20" y1="83" x2="35" y2="83"/><line x1="20" y1="89" x2="35" y2="89"/>
+    </g>
+    <!-- RIGHT pins -->
+    <g stroke="#3a4a5a" stroke-width="1.5" stroke-linecap="round">
+      <line x1="105" y1="47" x2="120" y2="47"/><line x1="105" y1="53" x2="120" y2="53"/>
+      <line x1="105" y1="59" x2="120" y2="59"/><line x1="105" y1="65" x2="120" y2="65"/>
+      <line x1="105" y1="71" x2="120" y2="71"/><line x1="105" y1="77" x2="120" y2="77"/>
+      <line x1="105" y1="83" x2="120" y2="83"/><line x1="105" y1="89" x2="120" y2="89"/>
+    </g>
+    <!-- TOP pins -->
+    <g stroke="#3a4a5a" stroke-width="1.5" stroke-linecap="round">
+      <line x1="47" y1="20" x2="47" y2="35"/><line x1="53" y1="20" x2="53" y2="35"/>
+      <line x1="59" y1="20" x2="59" y2="35"/><line x1="65" y1="20" x2="65" y2="35"/>
+      <line x1="71" y1="20" x2="71" y2="35"/><line x1="77" y1="20" x2="77" y2="35"/>
+      <line x1="83" y1="20" x2="83" y2="35"/><line x1="89" y1="20" x2="89" y2="35"/>
+    </g>
+    <!-- BOTTOM pins -->
+    <g stroke="#3a4a5a" stroke-width="1.5" stroke-linecap="round">
+      <line x1="47" y1="105" x2="47" y2="120"/><line x1="53" y1="105" x2="53" y2="120"/>
+      <line x1="59" y1="105" x2="59" y2="120"/><line x1="65" y1="105" x2="65" y2="120"/>
+      <line x1="71" y1="105" x2="71" y2="120"/><line x1="77" y1="105" x2="77" y2="120"/>
+      <line x1="83" y1="105" x2="83" y2="120"/><line x1="89" y1="105" x2="89" y2="120"/>
+    </g>
+    <!-- active pin highlights -->
+    <line x1="20" y1="47" x2="35" y2="47" stroke="#00e5ff" stroke-width="1.5" opacity="0.7"/>
+    <line x1="20" y1="65" x2="35" y2="65" stroke="#ff6b35" stroke-width="1.5" opacity="0.7"/>
+    <line x1="105" y1="71" x2="120" y2="71" stroke="#39ff14" stroke-width="1.5" opacity="0.7"/>
+    <line x1="71" y1="20" x2="71" y2="35" stroke="#c792ea" stroke-width="1.5" opacity="0.7"/>
+  </svg>
+
   <h1>SC<span>61860</span><br>DEVELOPER TOOLS</h1>
   <p class="hero-sub">
     Web-based utilities for the <em>SC61860</em> 8-bit CPU —<br>
     the processor behind <em>SHARP PC-12xx / 13xx / 14xx</em> pocket computers.
   </p>
-  <div class="chip-art">        ┌──────────────────────────────┐
-  ┤ Vdd                      GND ├
-  ┤ XIN    SC61860 / ESR-H   OSC ├
-  ┤ XOUT   ─────────────── RESET ├
-  ┤ IA[0..7]    HITACHI     CE0  ├
-  ┤ IB[0..7]    1980s       CE1  ├
-  ┤ D[0..7]     8-bit       OE   ├
-  ┤ A[0..15]    64KB        WE   ├
-        └──────────────────────────────┘</div>
 </section>
 
 <section class="cards-section">
   <div class="section-label">TOOLS</div>
   <div class="cards">
-
-    <!-- DISASSEMBLER -->
-    <a class="card" href="sc61860-disassembler.html">
-      <div class="card-icon">DASM</div>
-      <h2>Disassembler</h2>
-      <p>Paste raw hex bytes and get fully annotated assembly output. Supports big- and little-endian 16-bit operands, auto-generated labels for all branch and call targets, and a resizable split-pane editor.</p>
-      <div class="card-tags">
-        <span class="tag">BIG-ENDIAN</span>
-        <span class="tag">LABELS</span>
-        <span class="tag">RESIZABLE</span>
-        <span class="tag">ALL OPCODES</span>
-      </div>
-      <div class="card-arrow">OPEN TOOL &rarr;</div>
-    </a>
 
     <!-- ASSEMBLER -->
     <a class="card" href="sc61860-assembler.html">
@@ -317,18 +363,18 @@
       <div class="card-arrow">OPEN TOOL &rarr;</div>
     </a>
 
-    <!-- ISA REFERENCE -->
-    <a class="card" href="sc61860-reference.html">
-      <div class="card-icon purple">REF</div>
-      <h2>ISA Reference</h2>
-      <p>Complete self-hosted instruction set reference for the SC61860. Every opcode, flag, clock cycle, register, and addressing mode in one searchable page. Includes architecture notes, the LOOP and PTC/DTC usage guides, and the full register map.</p>
+    <!-- DISASSEMBLER -->
+    <a class="card" href="sc61860-disassembler.html">
+      <div class="card-icon">DASM</div>
+      <h2>Disassembler</h2>
+      <p>Paste raw hex bytes and get fully annotated assembly output. Supports big- and little-endian 16-bit operands, auto-generated labels for all branch and call targets, and a resizable split-pane editor.</p>
       <div class="card-tags">
+        <span class="tag">BIG-ENDIAN</span>
+        <span class="tag">LABELS</span>
+        <span class="tag">RESIZABLE</span>
         <span class="tag">ALL OPCODES</span>
-        <span class="tag">REGISTERS</span>
-        <span class="tag">SEARCHABLE</span>
-        <span class="tag">OFFLINE</span>
       </div>
-      <div class="card-arrow">OPEN REFERENCE &rarr;</div>
+      <div class="card-arrow">OPEN TOOL &rarr;</div>
     </a>
 
     <!-- MEMORY MAP -->
@@ -357,6 +403,20 @@
         <span class="tag">ROM ANNOT.</span>
       </div>
       <div class="card-arrow">OPEN VIEWER &rarr;</div>
+    </a>
+
+    <!-- ISA REFERENCE -->
+    <a class="card" href="sc61860-reference.html">
+      <div class="card-icon purple">REF</div>
+      <h2>ISA Reference</h2>
+      <p>Complete self-hosted instruction set reference for the SC61860. Every opcode, flag, clock cycle, register, and addressing mode in one searchable page. Includes architecture notes, the LOOP and PTC/DTC usage guides, and the full register map.</p>
+      <div class="card-tags">
+        <span class="tag">ALL OPCODES</span>
+        <span class="tag">REGISTERS</span>
+        <span class="tag">SEARCHABLE</span>
+        <span class="tag">OFFLINE</span>
+      </div>
+      <div class="card-arrow">OPEN REFERENCE &rarr;</div>
     </a>
 
   </div>

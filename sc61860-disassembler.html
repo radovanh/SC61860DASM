@@ -154,8 +154,6 @@
     transition: left 0.16s cubic-bezier(.4,0,.2,1), width 0.16s cubic-bezier(.4,0,.2,1);
     z-index: 0;
   }
-  .toggle-wrap.endian .toggle-slider { background: rgba(0,229,255,0.12); border: 1px solid rgba(0,229,255,0.55); }
-  .toggle-wrap.endian .toggle-opt.active { color: var(--accent); text-shadow: var(--glow); }
   .toggle-wrap.labels .toggle-slider { background: rgba(199,146,234,0.12); border: 1px solid rgba(199,146,234,0.55); }
   .toggle-wrap.labels .toggle-opt.active { color: var(--label); text-shadow: var(--glow3); }
 
@@ -421,13 +419,12 @@
 
   <div class="sep"></div>
 
-  <div class="toggle-group">
-    <span class="toggle-label">ENDIAN</span>
-    <div class="toggle-wrap endian" id="endian-toggle" onclick="toggleEndian()">
-      <div class="toggle-slider" id="endian-slider"></div>
-      <div class="toggle-opt active" id="endian-be">BIG</div>
-      <div class="toggle-opt"        id="endian-le">LITTLE</div>
-    </div>
+  <div class="filter-group">
+    <span class="filter-label">ENDIAN</span>
+    <select id="endian-select" onchange="onEndianChange()" title="16-bit address byte order">
+      <option value="big"    selected>Big (SC61860)</option>
+      <option value="little">Little</option>
+    </select>
   </div>
 
   <div class="toggle-group">
@@ -594,19 +591,14 @@ function slideToOpt(sliderId, optEl) {
   s.style.width = optEl.offsetWidth + 'px';
 }
 function initToggles() {
-  slideToOpt('endian-slider', document.getElementById('endian-be'));
   slideToOpt('label-slider',  document.getElementById('label-lbl'));
 }
 window.addEventListener('load',   initToggles);
 window.addEventListener('resize', initToggles);
 
-function toggleEndian() {
-  useBigEndian = !useBigEndian;
-  const be = document.getElementById('endian-be');
-  const le = document.getElementById('endian-le');
-  be.classList.toggle('active', useBigEndian);
-  le.classList.toggle('active', !useBigEndian);
-  slideToOpt('endian-slider', useBigEndian ? be : le);
+function onEndianChange() {
+  useBigEndian = document.getElementById('endian-select').value === 'big';
+  disassemble();
 }
 function toggleLabels() {
   useLabels = !useLabels;
