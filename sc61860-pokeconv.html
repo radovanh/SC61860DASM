@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC61860 BASIC POKE Converter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0a0c10;
+    --panel:    #0f1319;
+    --border:   #1e2d3d;
+    --accent:   #00e5ff;
+    --accent2:  #ff6b35;
+    --green:    #39ff14;
+    --purple:   #c792ea;
+    --dim:      #3a4a5a;
+    --text:     #c8d8e8;
+    --muted:    #5a7a8a;
+    --addr:     #ff6b35;
+    --hex:      #00e5ff;
+    --ascii:    #c8d8e8;
+    --error:    #ff4444;
+    --glow:     0 0 8px rgba(0,229,255,0.4);
+    --glow2:    0 0 8px rgba(57,255,20,0.3);
+    --glow3:    0 0 8px rgba(199,146,234,0.4);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { height: 100%; overflow: hidden; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.10) 2px, rgba(0,0,0,0.10) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* ── HEADER ── */
+  header {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: linear-gradient(180deg, rgba(0,229,255,0.04) 0%, transparent 100%);
+    position: relative;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+    opacity: 0.45;
+  }
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900; font-size: 20px;
+    color: var(--accent); text-shadow: var(--glow);
+    letter-spacing: 2px; white-space: nowrap; text-decoration: none;
+  }
+  .logo span { color: var(--accent2); text-shadow: 0 0 8px rgba(255,107,53,0.5); }
+  .tagline { color: var(--muted); font-size: 11px; letter-spacing: 1px; }
+  .nav-back {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    color: var(--muted); text-decoration: none; letter-spacing: 1px;
+    border: 1px solid var(--dim); padding: 5px 12px; border-radius: 2px;
+    transition: all 0.2s;
+  }
+  .nav-back:hover { color: var(--accent); border-color: var(--accent); }
+  .badge {
+    margin-left: auto; font-size: 11px; color: var(--muted);
+    text-align: right; line-height: 1.6;
+  }
+  .badge em { color: var(--accent2); font-style: normal; }
+
+  /* ── CONTROLS ── */
+  .controls {
+    flex-shrink: 0;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 9px 28px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    row-gap: 7px;
+  }
+
+  label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+  .btn {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; padding: 0 15px; border: 1px solid currentColor;
+    background: transparent; cursor: pointer; border-radius: 2px;
+    transition: all 0.2s; text-transform: uppercase; white-space: nowrap;
+    height: 28px; display: flex; align-items: center; gap: 6px;
+  }
+  .btn-primary   { color: var(--accent); border-color: var(--accent); }
+  .btn-primary:hover  { background: rgba(0,229,255,0.1); box-shadow: var(--glow); }
+  .btn-orange    { color: var(--accent2); border-color: var(--accent2); }
+  .btn-orange:hover   { background: rgba(255,107,53,0.1); box-shadow: 0 0 8px rgba(255,107,53,0.4); }
+  .btn-green     { color: var(--green); border-color: var(--green); }
+  .btn-green:hover    { background: rgba(57,255,20,0.08); box-shadow: var(--glow2); }
+  .btn-secondary { color: var(--muted); border-color: var(--dim); }
+  .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+  .btn-danger    { color: var(--error); border-color: var(--error); }
+  .btn-danger:hover   { background: rgba(255,68,68,0.08); }
+
+  .sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+
+  /* mode toggle */
+  .toggle-group { display: flex; align-items: center; gap: 7px; }
+  .toggle-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
+  .toggle-wrap {
+    position: relative; display: flex; align-items: stretch;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 2px; overflow: hidden; cursor: pointer;
+    user-select: none; height: 28px;
+  }
+  .toggle-opt {
+    padding: 0 14px; display: flex; align-items: center;
+    font-family: 'Orbitron', monospace; font-size: 10px;
+    font-weight: 700; letter-spacing: 1px; color: var(--muted);
+    transition: color 0.18s; position: relative; z-index: 1; white-space: nowrap;
+  }
+  .toggle-slider {
+    position: absolute; top: 2px; bottom: 2px; border-radius: 1px;
+    background: rgba(255,107,53,0.12); border: 1px solid rgba(255,107,53,0.55);
+    transition: left 0.16s cubic-bezier(.4,0,.2,1), width 0.16s cubic-bezier(.4,0,.2,1);
+    z-index: 0;
+  }
+  .toggle-opt.active { color: var(--accent2); }
+
+  .stat-pill { font-size: 11px; color: var(--muted); margin-left: auto; }
+  .stat-pill em { color: var(--green); font-style: normal; font-weight: bold; }
+
+  /* ── WORKSPACE SPLIT ── */
+  .workspace {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .pane {
+    display: flex;
+    flex-direction: column;
+    min-width: 120px;
+    min-height: 0;
+    overflow: hidden;
+  }
+  #pane-left  { flex: 0 0 auto; width: 44%; }
+  #pane-right { flex: 1 1 0; }
+
+  .pane-header {
+    flex-shrink: 0;
+    padding: 9px 18px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px; color: var(--muted);
+    letter-spacing: 2px; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .pane-header .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent2); box-shadow: 0 0 8px rgba(255,107,53,0.6);
+    animation: pulse 2s infinite; flex-shrink: 0;
+  }
+  .pane-header .dot.green { background: var(--green); box-shadow: var(--glow2); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  #bas-input {
+    flex: 1;
+    background: var(--bg); border: none;
+    color: var(--accent2);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; line-height: 1.7;
+    padding: 18px; resize: none; outline: none; letter-spacing: 0.3px;
+    tab-size: 4;
+  }
+  #bas-input::placeholder { color: var(--dim); }
+
+  /* ── SPLITTER ── */
+  #splitter {
+    flex-shrink: 0; width: 6px;
+    background: var(--border);
+    cursor: col-resize;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+    position: relative;
+  }
+  #splitter:hover, #splitter.dragging { background: var(--accent2); }
+  #splitter::after {
+    content: '⋮';
+    color: var(--dim); font-size: 14px;
+    position: absolute; top: 50%; transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  /* ── OUTPUT PANE ── */
+  #output-area {
+    flex: 1; overflow-y: auto; overflow-x: auto;
+    padding: 18px 22px;
+    font-size: 13px; line-height: 1.75; letter-spacing: 0.3px;
+  }
+  #output-area::-webkit-scrollbar { width: 6px; height: 6px; }
+  #output-area::-webkit-scrollbar-track { background: var(--bg); }
+  #output-area::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+
+  /* hex dump output */
+  .out-block-header {
+    color: var(--muted); font-size: 11px; letter-spacing: 2px;
+    border-bottom: 1px solid var(--border); padding-bottom: 4px; margin-bottom: 8px;
+    margin-top: 18px;
+  }
+  .out-block-header:first-child { margin-top: 0; }
+
+  .out-row { display: flex; gap: 0; white-space: pre; }
+  .out-addr { color: var(--addr); min-width: 52px; }
+  .out-colon { color: var(--dim); }
+  .out-hex-group { color: var(--hex); min-width: 52px; /* 3 chars × n */ }
+  .out-ascii-sep { color: var(--dim); padding: 0 6px; }
+  .out-ascii { color: var(--muted); }
+  .out-ascii .printable { color: var(--ascii); }
+
+  /* pure hex mode */
+  .out-pure { color: var(--hex); word-break: break-all; line-height: 2; letter-spacing: 1px; }
+  .out-pure span { color: var(--accent2); }  /* address markers */
+
+  /* summary block */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px; background: var(--border);
+    border: 1px solid var(--border); border-radius: 2px;
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .summary-cell {
+    background: var(--panel); padding: 12px 16px;
+  }
+  .summary-key { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 5px; }
+  .summary-val { font-size: 14px; color: var(--accent); font-family: 'Orbitron', monospace; font-weight: 700; }
+  .summary-val.orange { color: var(--accent2); }
+  .summary-val.green  { color: var(--green); }
+  .summary-val.purple { color: var(--purple); }
+
+  /* error display */
+  .out-error { color: var(--error); font-size: 12px; padding: 4px 0; }
+
+  /* empty state */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; gap: 14px; opacity: 0.35;
+  }
+  .empty-state svg { opacity: 0.5; }
+  .empty-state p { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-align: center; line-height: 1.8; }
+
+  /* file drop zone highlight */
+  #pane-left.drag-over #bas-input {
+    border: 1px dashed var(--accent2);
+    background: rgba(255,107,53,0.04);
+  }
+
+  /* scrollbar */
+  #bas-input::-webkit-scrollbar { width: 6px; }
+  #bas-input::-webkit-scrollbar-track { background: var(--bg); }
+  #bas-input::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="logo" href="index.html">SC<span>61860</span></a>
+  <div>
+    <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:700;color:var(--accent2);letter-spacing:2px">POKE CONVERTER</div>
+    <div class="tagline">BASIC → HEX / BINARY EXTRACTOR</div>
+  </div>
+  <a class="nav-back" href="index.html">← INDEX</a>
+  <div class="badge">
+    <em>SHARP PC-12xx/13xx/14xx</em><br>
+    POKE &amp;ADDR, val, val, …
+  </div>
+</header>
+
+<div class="controls">
+  <!-- mode toggle -->
+  <div class="toggle-group">
+    <span class="toggle-label">OUTPUT</span>
+    <div class="toggle-wrap" id="mode-toggle" onclick="cycleMode()">
+      <div class="toggle-opt active" id="mode-hex-dump">HEX DUMP</div>
+      <div class="toggle-opt" id="mode-pure-hex">PURE HEX</div>
+      <div class="toggle-slider" id="mode-slider"></div>
+    </div>
+  </div>
+
+  <div class="sep"></div>
+
+  <!-- bytes per row -->
+  <label for="bpr-sel">ROW WIDTH</label>
+  <select id="bpr-sel" onchange="convert()" style="width:70px">
+    <option value="8">8</option>
+    <option value="16" selected>16</option>
+    <option value="32">32</option>
+  </select>
+
+  <div class="sep"></div>
+
+  <button class="btn btn-orange" onclick="convert()">▶ CONVERT</button>
+  <button class="btn btn-secondary" onclick="loadFile()">↑ LOAD FILE</button>
+  <button class="btn btn-secondary" onclick="clearInput()">✕ CLEAR</button>
+  <input type="file" id="file-input" accept=".bas,.txt,.BAS" style="display:none" onchange="handleFile(event)">
+
+  <div class="sep"></div>
+
+  <button class="btn btn-green" id="dl-hex-btn" onclick="downloadHex()" disabled>↓ HEX TXT</button>
+  <button class="btn btn-primary" id="dl-bin-btn" onclick="downloadBin()" disabled>↓ BINARY</button>
+  <button class="btn btn-secondary" id="dl-disasm-btn" onclick="sendToDisasm()" disabled title="Open extracted bytes in Disassembler">→ DISASM</button>
+
+  <div class="sep"></div>
+  <div class="stat-pill" id="stat-pill">NO INPUT</div>
+</div>
+
+<!-- workspace -->
+<div class="workspace" id="workspace">
+
+  <!-- LEFT: BASIC input -->
+  <div class="pane" id="pane-left">
+    <div class="pane-header">
+      <div class="dot"></div>
+      BASIC SOURCE
+      <span style="margin-left:auto;font-size:10px;color:var(--dim)">DROP .BAS FILE OR PASTE</span>
+    </div>
+    <textarea id="bas-input" spellcheck="false"
+      placeholder="10: REM paste SHARP BASIC source here&#10;100: POKE &amp;8030,&amp;79,&amp;82,&amp;8C,&amp;79&#10;110: POKE &amp;8040,&amp;84,&amp;F3,&amp;79,&amp;83&#10;&#10;; both hex (&amp;XX) and decimal values supported"></textarea>
+  </div>
+
+  <!-- SPLITTER -->
+  <div id="splitter"></div>
+
+  <!-- RIGHT: output -->
+  <div class="pane" id="pane-right">
+    <div class="pane-header">
+      <div class="dot green"></div>
+      <span id="pane-right-title">OUTPUT</span>
+    </div>
+    <div id="output-area">
+      <div class="empty-state" id="empty-state">
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="8" y="8" width="48" height="48" rx="4" stroke="#3a4a5a" stroke-width="1.5"/>
+          <line x1="16" y1="20" x2="48" y2="20" stroke="#3a4a5a" stroke-width="1"/>
+          <line x1="16" y1="28" x2="48" y2="28" stroke="#3a4a5a" stroke-width="1"/>
+          <line x1="16" y1="36" x2="40" y2="36" stroke="#3a4a5a" stroke-width="1"/>
+          <line x1="16" y1="44" x2="34" y2="44" stroke="#3a4a5a" stroke-width="1"/>
+          <circle cx="50" cy="50" r="10" fill="#0a0c10" stroke="#ff6b35" stroke-width="1.5"/>
+          <text x="50" y="54" text-anchor="middle" font-family="monospace" font-size="10" fill="#ff6b35">→</text>
+        </svg>
+        <p>PASTE BASIC SOURCE<br>OR LOAD A .BAS FILE<br>THEN PRESS ▶ CONVERT</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────
+let lastMemory = null;   // Map: addr → byte
+let lastFilename = 'output';
+let currentMode = 0;     // 0 = hex dump, 1 = pure hex
+
+// ── Mode toggle ────────────────────────────────────────────────────────
+const modeOpts  = ['mode-hex-dump', 'mode-pure-hex'];
+const modeNames = ['HEX DUMP', 'PURE HEX'];
+
+function cycleMode() {
+  currentMode = (currentMode + 1) % 2;
+  updateModeUI();
+  if (lastMemory) renderOutput(lastMemory);
+}
+
+function updateModeUI() {
+  modeOpts.forEach((id, i) => {
+    document.getElementById(id).classList.toggle('active', i === currentMode);
+  });
+  // slide the slider
+  const wrap   = document.getElementById('mode-toggle');
+  const slider = document.getElementById('mode-slider');
+  const active = document.getElementById(modeOpts[currentMode]);
+  slider.style.left  = active.offsetLeft + 'px';
+  slider.style.width = active.offsetWidth + 'px';
+  document.getElementById('pane-right-title').textContent =
+    modeNames[currentMode] + ' OUTPUT';
+}
+
+// init slider position
+window.addEventListener('load', () => { updateModeUI(); initSplitter(); });
+
+// ── Parser ─────────────────────────────────────────────────────────────
+function parseValue(token) {
+  token = token.trim();
+  if (!token) return null;
+  if (token.startsWith('&') || token.startsWith('&')) {
+    const h = token.slice(1);
+    if (!/^[0-9A-Fa-f]+$/.test(h)) return null;
+    return parseInt(h, 16);
+  }
+  if (/^\d+$/.test(token)) return parseInt(token, 10);
+  return null;
+}
+
+function extractPokes(source) {
+  const memory = new Map();
+  const errors  = [];
+  const pokeRe  = /\bPOKE\s+(&[0-9A-Fa-f]+|\d+)\s*,\s*(.+)/gi;
+  const lines   = source.split('\n');
+
+  for (const line of lines) {
+    const stripped = line.replace(/^\s*\d+\s*/, '').trim();
+    let m;
+    pokeRe.lastIndex = 0;
+    while ((m = pokeRe.exec(stripped)) !== null) {
+      const addrToken = m[1];
+      let addr = parseValue(addrToken);
+      if (addr === null) { errors.push(`Bad address: ${addrToken}`); continue; }
+
+      const valStr = m[2];
+      const tokens = valStr.split(',');
+      for (const tok of tokens) {
+        const t = tok.trim();
+        if (!t) continue;
+        const v = parseValue(t);
+        if (v === null) break;   // hit a non-value token (next statement)
+        memory.set(addr, v & 0xFF);
+        addr++;
+      }
+    }
+  }
+  return { memory, errors };
+}
+
+// ── Render ─────────────────────────────────────────────────────────────
+function sortedAddrs(memory) {
+  return [...memory.keys()].sort((a, b) => a - b);
+}
+
+function getBlocks(addrs) {
+  if (!addrs.length) return [];
+  const blocks = [];
+  let cur = [addrs[0]];
+  for (let i = 1; i < addrs.length; i++) {
+    if (addrs[i] === addrs[i-1] + 1) cur.push(addrs[i]);
+    else { blocks.push(cur); cur = [addrs[i]]; }
+  }
+  blocks.push(cur);
+  return blocks;
+}
+
+function hex2(n) { return n.toString(16).toUpperCase().padStart(2, '0'); }
+function hex4(n) { return n.toString(16).toUpperCase().padStart(4, '0'); }
+
+function renderHexDump(memory, bpr) {
+  const addrs  = sortedAddrs(memory);
+  const blocks = getBlocks(addrs);
+  const frag   = document.createDocumentFragment();
+
+  for (const block of blocks) {
+    const startA = block[0], endA = block[block.length - 1];
+
+    // block header
+    const hdr = document.createElement('div');
+    hdr.className = 'out-block-header';
+    hdr.textContent = `; Block $${hex4(startA)}–$${hex4(endA)}  (${block.length} bytes)`;
+    frag.appendChild(hdr);
+
+    for (let rowStart = startA; rowStart <= endA; rowStart += bpr) {
+      const rowEnd = Math.min(rowStart + bpr - 1, endA);
+      const row    = document.createElement('div');
+      row.className = 'out-row';
+
+      // address
+      const addrEl = document.createElement('span');
+      addrEl.className = 'out-addr';
+      addrEl.textContent = `  ${hex4(rowStart)}:  `;
+      row.appendChild(addrEl);
+
+      // hex bytes
+      const hexEl = document.createElement('span');
+      hexEl.className = 'out-hex-group';
+      const hexCells = [];
+      for (let a = rowStart; a <= rowStart + bpr - 1; a++) {
+        if (a <= rowEnd) hexCells.push(hex2(memory.get(a)));
+        else             hexCells.push('  ');
+      }
+      hexEl.textContent = hexCells.join(' ');
+      row.appendChild(hexEl);
+
+      // separator
+      const sep = document.createElement('span');
+      sep.className = 'out-ascii-sep';
+      sep.textContent = '  |';
+      row.appendChild(sep);
+
+      // ASCII
+      const ascEl = document.createElement('span');
+      ascEl.className = 'out-ascii';
+      for (let a = rowStart; a <= rowEnd; a++) {
+        const v   = memory.get(a);
+        const ch  = (v >= 0x20 && v <= 0x7E) ? String.fromCharCode(v) : '.';
+        const sp  = document.createElement('span');
+        if (v >= 0x20 && v <= 0x7E) sp.className = 'printable';
+        sp.textContent = ch;
+        ascEl.appendChild(sp);
+      }
+      row.appendChild(ascEl);
+
+      const sep2 = document.createElement('span');
+      sep2.className = 'out-ascii-sep';
+      sep2.textContent = '|';
+      row.appendChild(sep2);
+
+      frag.appendChild(row);
+    }
+
+    // spacer
+    frag.appendChild(document.createElement('br'));
+  }
+  return frag;
+}
+
+function renderPureHex(memory, bpr) {
+  const addrs  = sortedAddrs(memory);
+  const blocks = getBlocks(addrs);
+  const frag   = document.createDocumentFragment();
+
+  for (const block of blocks) {
+    const hdr = document.createElement('div');
+    hdr.className = 'out-block-header';
+    hdr.textContent = `; $${hex4(block[0])}  (${block.length} bytes)`;
+    frag.appendChild(hdr);
+
+    const container = document.createElement('div');
+    container.className = 'out-pure';
+
+    let lineBytes = [];
+    let lineStart  = block[0];
+
+    const flush = (start) => {
+      if (!lineBytes.length) return;
+      const addrMark = document.createElement('span');
+      addrMark.textContent = `$${hex4(start)}: `;
+      container.appendChild(addrMark);
+
+      const t = document.createTextNode(lineBytes.join(' ') + '\n');
+      container.appendChild(t);
+      lineBytes = [];
+    };
+
+    for (let i = 0; i < block.length; i++) {
+      if (i > 0 && i % bpr === 0) { flush(lineStart); lineStart = block[i]; }
+      lineBytes.push(hex2(memory.get(block[i])));
+    }
+    flush(lineStart);
+
+    frag.appendChild(container);
+    frag.appendChild(document.createElement('br'));
+  }
+  return frag;
+}
+
+function renderOutput(memory) {
+  const bpr    = parseInt(document.getElementById('bpr-sel').value);
+  const outEl  = document.getElementById('output-area');
+  const empty  = document.getElementById('empty-state');
+
+  outEl.innerHTML = '';
+
+  if (!memory || memory.size === 0) {
+    outEl.appendChild(empty);
+    return;
+  }
+  empty.style.display = 'none';
+
+  const addrs  = sortedAddrs(memory);
+  const blocks = getBlocks(addrs);
+  const gaps   = (addrs[addrs.length-1] - addrs[0] + 1) - memory.size;
+
+  // summary
+  const sg = document.createElement('div');
+  sg.className = 'summary-grid';
+  const cells = [
+    ['START ADDR', `$${hex4(addrs[0])}`, ''],
+    ['END ADDR',   `$${hex4(addrs[addrs.length-1])}`, 'orange'],
+    ['POKE BYTES', memory.size.toString(), 'green'],
+    ['BLOCKS',     blocks.length.toString(), ''],
+    ['SPAN',       (addrs[addrs.length-1] - addrs[0] + 1).toString() + ' B', 'orange'],
+    ['GAPS (0x00)',gaps.toString(), gaps > 0 ? 'purple' : ''],
+  ];
+  for (const [k, v, cls] of cells) {
+    const c = document.createElement('div');
+    c.className = 'summary-cell';
+    c.innerHTML = `<div class="summary-key">${k}</div><div class="summary-val ${cls}">${v}</div>`;
+    sg.appendChild(c);
+  }
+  outEl.appendChild(sg);
+
+  const frag = currentMode === 0
+    ? renderHexDump(memory, bpr)
+    : renderPureHex(memory, bpr);
+  outEl.appendChild(frag);
+}
+
+// ── Convert ────────────────────────────────────────────────────────────
+function convert() {
+  const src = document.getElementById('bas-input').value;
+  if (!src.trim()) {
+    setPill('NO INPUT');
+    return;
+  }
+
+  const { memory, errors } = extractPokes(src);
+  lastMemory = memory;
+
+  // errors
+  const outEl = document.getElementById('output-area');
+  if (errors.length) {
+    const errDiv = document.createElement('div');
+    for (const e of errors) {
+      const p = document.createElement('div');
+      p.className = 'out-error';
+      p.textContent = '⚠ ' + e;
+      errDiv.appendChild(p);
+    }
+    outEl.prepend(errDiv);
+  }
+
+  renderOutput(memory);
+
+  const enabled = memory.size > 0;
+  document.getElementById('dl-hex-btn').disabled  = !enabled;
+  document.getElementById('dl-bin-btn').disabled  = !enabled;
+  document.getElementById('dl-disasm-btn').disabled = !enabled;
+
+  if (memory.size === 0) {
+    setPill('NO POKE STATEMENTS FOUND');
+  } else {
+    const addrs = sortedAddrs(memory);
+    setPill(`<em>${memory.size}</em> BYTES  $${hex4(addrs[0])}–$${hex4(addrs[addrs.length-1])}`);
+  }
+}
+
+function setPill(html) {
+  document.getElementById('stat-pill').innerHTML = html;
+}
+
+// ── Build binary (flat, gap-filled) ───────────────────────────────────
+function buildBinary(memory) {
+  const addrs = sortedAddrs(memory);
+  const start = addrs[0], end = addrs[addrs.length - 1];
+  const buf   = new Uint8Array(end - start + 1);
+  for (const [addr, val] of memory) buf[addr - start] = val;
+  return buf;
+}
+
+// ── Build hex text ─────────────────────────────────────────────────────
+function buildHexText(memory) {
+  const bpr    = parseInt(document.getElementById('bpr-sel').value);
+  const addrs  = sortedAddrs(memory);
+  const blocks = getBlocks(addrs);
+  const lines  = [];
+
+  for (const block of blocks) {
+    const s = block[0], e = block[block.length - 1];
+    lines.push(`; Block $${hex4(s)}–$${hex4(e)}  (${block.length} bytes)`);
+    for (let rowStart = s; rowStart <= e; rowStart += bpr) {
+      const rowEnd = Math.min(rowStart + bpr - 1, e);
+      const hexPart   = [];
+      const asciiPart = [];
+      for (let a = rowStart; a <= rowEnd; a++) {
+        const v = memory.get(a);
+        hexPart.push(hex2(v));
+        asciiPart.push((v >= 0x20 && v <= 0x7E) ? String.fromCharCode(v) : '.');
+      }
+      const pad = '   '.repeat(bpr - hexPart.length);
+      lines.push(`  ${hex4(rowStart)}:  ${hexPart.join(' ')}${pad}  |${asciiPart.join('')}|`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+// ── Downloads ──────────────────────────────────────────────────────────
+function downloadHex() {
+  if (!lastMemory) return;
+  const text = buildHexText(lastMemory);
+  const blob = new Blob([text], { type: 'text/plain' });
+  triggerDownload(blob, lastFilename + '.hex');
+}
+
+function downloadBin() {
+  if (!lastMemory) return;
+  const buf  = buildBinary(lastMemory);
+  const blob = new Blob([buf], { type: 'application/octet-stream' });
+  triggerDownload(blob, lastFilename + '.bin');
+}
+
+function triggerDownload(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ── Send to disassembler ───────────────────────────────────────────────
+function sendToDisasm() {
+  if (!lastMemory) return;
+  const addrs  = sortedAddrs(lastMemory);
+  const start  = addrs[0];
+  const buf    = buildBinary(lastMemory);
+  const hexStr = Array.from(buf).map(b => hex2(b)).join(' ');
+  // store in sessionStorage for disassembler to pick up
+  sessionStorage.setItem('sc61860_disasm_hex',  hexStr);
+  sessionStorage.setItem('sc61860_disasm_org',  hex4(start));
+  window.open('sc61860-disassembler.html', '_blank');
+}
+
+// ── File loading ───────────────────────────────────────────────────────
+function loadFile() { document.getElementById('file-input').click(); }
+
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  lastFilename = file.name.replace(/\.[^.]+$/, '');
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('bas-input').value = ev.target.result;
+    convert();
+  };
+  reader.readAsText(file, 'latin1');
+  e.target.value = '';
+}
+
+// drag-and-drop on left pane
+const paneLeft = document.getElementById('pane-left');
+paneLeft.addEventListener('dragover', e => { e.preventDefault(); paneLeft.classList.add('drag-over'); });
+paneLeft.addEventListener('dragleave', () => paneLeft.classList.remove('drag-over'));
+paneLeft.addEventListener('drop', e => {
+  e.preventDefault();
+  paneLeft.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  lastFilename = file.name.replace(/\.[^.]+$/, '');
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('bas-input').value = ev.target.result;
+    convert();
+  };
+  reader.readAsText(file, 'latin1');
+});
+
+function clearInput() {
+  document.getElementById('bas-input').value = '';
+  lastMemory = null;
+  document.getElementById('output-area').innerHTML = '';
+  document.getElementById('output-area').appendChild(document.getElementById('empty-state'));
+  document.getElementById('empty-state').style.display = '';
+  document.getElementById('dl-hex-btn').disabled  = true;
+  document.getElementById('dl-bin-btn').disabled  = true;
+  document.getElementById('dl-disasm-btn').disabled = true;
+  setPill('NO INPUT');
+}
+
+// ── Splitter ───────────────────────────────────────────────────────────
+function initSplitter() {
+  const splitter  = document.getElementById('splitter');
+  const workspace = document.getElementById('workspace');
+  const paneL     = document.getElementById('pane-left');
+  let dragging = false, startX = 0, startW = 0;
+
+  splitter.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX; startW = paneL.offsetWidth;
+    splitter.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const totalW = workspace.offsetWidth;
+    const newW   = Math.min(Math.max(startW + (e.clientX - startX), 200), totalW - 200);
+    paneL.style.width = newW + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    splitter.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+}
+
+// ── Auto-convert on paste / input (debounced) ──────────────────────────
+let debTimer = null;
+document.getElementById('bas-input').addEventListener('input', () => {
+  clearTimeout(debTimer);
+  debTimer = setTimeout(convert, 600);
+});
+
+// ── Check sessionStorage for data passed from disassembler (round-trip) ─
+window.addEventListener('load', () => {
+  const payload = sessionStorage.getItem('sc61860_poke_bas');
+  if (payload) {
+    document.getElementById('bas-input').value = payload;
+    sessionStorage.removeItem('sc61860_poke_bas');
+    convert();
+  }
+});
+</script>
+</body>
+</html>
