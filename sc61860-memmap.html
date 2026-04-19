@@ -500,9 +500,11 @@ const ENTRIES = [
   // ── PC-1403 INTERNAL ROM UTILITY STUBS ────────────────────────────────────
   { section: 'PC-1403 / PC-1460 — INTERNAL ROM UTILITY STUBS' },
   { addr:0x159E, name:'EXG_iRAM_04_0C', cat:'ROM', devices:['1403'],
-    desc:'Exchange internal RAM byte at address $04 (REG XL) with byte at $0C (REG YL). ' +
+    desc:'Exchanges the 16-bit X register (&04/&05 = XL/XH) with the two scratchpad bytes at &0C/&0D. ' +
          'Opcode sequence: LP $04 · LIQ $0C · EXB · RTN. ' +
-         '4-byte utility stub; called by arithmetic and BCD routines that need to swap XL↔YL in the SC61860 internal register file.',
+         'EXB swaps J+1 bytes between (P) and (Q); called with J=1 to exchange both bytes. ' +
+         'Acts as a save/restore of X: simultaneously loads a previously stored pointer from &0C/&0D into X while saving the old X back into &0C/&0D. ' +
+         'Classic "exchange with memory" pattern used when the CPU needs to juggle 16-bit pointer values across calls.',
     src:'PC-1403 ROM disassembly — verified' },
 
   // ── PC-1350 SYSTEM RAM ────────────────────────────────────────────────────
