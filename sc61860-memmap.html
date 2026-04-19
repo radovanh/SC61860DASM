@@ -497,6 +497,14 @@ const ENTRIES = [
   { addr:0x8410, name:'CASSETTE_LOAD', cat:'SERIAL', devices:['1403'],
     desc:'Load program/data from CE-124 cassette interface.', src:'Community' },
 
+  // ── PC-1403 INTERNAL ROM UTILITY STUBS ────────────────────────────────────
+  { section: 'PC-1403 / PC-1460 — INTERNAL ROM UTILITY STUBS' },
+  { addr:0x159E, name:'EXG_iRAM_04_0C', cat:'ROM', devices:['1403'],
+    desc:'Exchange internal RAM byte at address $04 (REG XL) with byte at $0C (REG YL). ' +
+         'Opcode sequence: LP $04 · LIQ $0C · EXB · RTN. ' +
+         '4-byte utility stub; called by arithmetic and BCD routines that need to swap XL↔YL in the SC61860 internal register file.',
+    src:'PC-1403 ROM disassembly — verified' },
+
   // ── PC-1350 SYSTEM RAM ────────────────────────────────────────────────────
   { section: 'PC-1350 — SYSTEM RAM ($6800–$7FFF)' },
   { addr:0x6800, addrEnd:0x7FFF, name:'Internal User RAM', cat:'RAM', devices:['1350'],
