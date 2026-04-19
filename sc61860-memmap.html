@@ -668,6 +668,12 @@ const ENTRIES = [
     desc:'Keyboard input line buffer (Eingabebuffer).',
     src:'Sharp PC-1261 manual §VII.4' },
 
+  { section: 'PC-1261 / PC-1262 — I/O REGISTERS ($3000–$3FFF)' },
+  { addr:0x303D, name:'KBD_MODE', cat:'IO', devices:['1262'],
+    desc:'Keyboard mode select register. Write 9 ($09) to activate Japanese (Kana) keyboard layout; write 1 ($01) to revert to international (Roman) layout. ' +
+         'Verified via BASIC: POKE 12349,9 (Japanese) · POKE 12349,1 (international).',
+    src:'PC-1261/1262 BASIC — POKE 12349 verified' },
+
   { section: 'PC-1261 / PC-1262 — CORE ROM ROUTINES ($0000–$1FFF)' },
   { addr:0x0222, name:'BA_TO_Y', cat:'ROM', devices:['1262'],
     desc:'BA → Y  (copy register pair BA into Y register)',
