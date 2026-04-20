@@ -1283,6 +1283,19 @@ function loadSample() {
 document.addEventListener('keydown', e=>{
   if ((e.ctrlKey||e.metaKey)&&e.key==='Enter') disassemble();
 });
+
+// ── Pick up data passed from POKE Converter ────────────────────────────
+window.addEventListener('load', () => {
+  const hex = sessionStorage.getItem('sc61860_disasm_hex');
+  const org = sessionStorage.getItem('sc61860_disasm_org');
+  if (hex) {
+    sessionStorage.removeItem('sc61860_disasm_hex');
+    sessionStorage.removeItem('sc61860_disasm_org');
+    if (org) document.getElementById('org-addr').value = org;
+    document.getElementById('hex-input').value = hex;
+    disassemble();
+  }
+});
 </script>
 </body>
 </html>

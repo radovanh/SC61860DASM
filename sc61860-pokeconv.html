@@ -677,31 +677,14 @@ function buildBinary(memory) {
   return buf;
 }
 
-// ── Build hex text ─────────────────────────────────────────────────────
+// ── Build hex text (pure hex values only, 16 per line) ────────────────
 function buildHexText(memory) {
-  const bpr    = parseInt(document.getElementById('bpr-sel').value);
-  const addrs  = sortedAddrs(memory);
-  const blocks = getBlocks(addrs);
-  const lines  = [];
-
-  for (const block of blocks) {
-    const s = block[0], e = block[block.length - 1];
-    lines.push(`; Block $${hex4(s)}–$${hex4(e)}  (${block.length} bytes)`);
-    for (let rowStart = s; rowStart <= e; rowStart += bpr) {
-      const rowEnd = Math.min(rowStart + bpr - 1, e);
-      const hexPart   = [];
-      const asciiPart = [];
-      for (let a = rowStart; a <= rowEnd; a++) {
-        const v = memory.get(a);
-        hexPart.push(hex2(v));
-        asciiPart.push((v >= 0x20 && v <= 0x7E) ? String.fromCharCode(v) : '.');
-      }
-      const pad = '   '.repeat(bpr - hexPart.length);
-      lines.push(`  ${hex4(rowStart)}:  ${hexPart.join(' ')}${pad}  |${asciiPart.join('')}|`);
-    }
-    lines.push('');
+  const addrs = sortedAddrs(memory);
+  const lines = [];
+  for (let i = 0; i < addrs.length; i += 16) {
+    lines.push(addrs.slice(i, i + 16).map(a => hex2(memory.get(a))).join(' '));
   }
-  return lines.join('\n');
+  return lines.join('\n') + '\n';
 }
 
 // ── Downloads ──────────────────────────────────────────────────────────
@@ -735,10 +718,9 @@ function sendToDisasm() {
   const start  = addrs[0];
   const buf    = buildBinary(lastMemory);
   const hexStr = Array.from(buf).map(b => hex2(b)).join(' ');
-  // store in sessionStorage for disassembler to pick up
-  sessionStorage.setItem('sc61860_disasm_hex',  hexStr);
-  sessionStorage.setItem('sc61860_disasm_org',  hex4(start));
-  window.open('sc61860-disassembler.html', '_blank');
+  sessionStorage.setItem('sc61860_disasm_hex', hexStr);
+  sessionStorage.setItem('sc61860_disasm_org', hex4(start));
+  window.location.href = 'sc61860-disassembler.html';
 }
 
 // ── File loading ───────────────────────────────────────────────────────
