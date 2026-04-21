@@ -292,6 +292,7 @@
     footer { padding: 7px 14px; gap: 14px; }
   }
 </style>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
 </head>
 <body>
 
@@ -327,7 +328,6 @@
       </div>
     </div>
   </div>
-  <button class="btn btn-secondary" id="poke-btn" onclick="sendToPoke()" title="Send assembled bytes to POKE Converter">&#8594;&nbsp;POKE</button>
   <input type="file" id="src-file-input" accept=".asm,.s,.txt,*" style="display:none" onchange="handleSourceLoad(this)">
 
   <div class="stat-pill" id="stats">READY</div>
@@ -1370,23 +1370,6 @@ function triggerDownload(blob, filename) {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-// ══════════════════════════════════════════════════════════
-// SEND TO POKE CONVERTER
-// ══════════════════════════════════════════════════════════
-function sendToPoke() {
-  const data = getOutputBytes();
-  if (!data) {
-    alert('Nothing assembled yet — assemble your source first.');
-    return;
-  }
-  const { keys, addrMap } = data;
-  const hexStr = keys.map(a => h2(addrMap.get(a))).join(' ');
-  const startAddr = keys[0];
-  sessionStorage.setItem('sc61860_poke_hex', hexStr);
-  sessionStorage.setItem('sc61860_poke_org', h4(startAddr));
-  window.location.href = 'sc61860-pokeconv.html';
 }
 </script>
 </body>

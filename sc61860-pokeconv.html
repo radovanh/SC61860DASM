@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SC61860 POKE Converter</title>
+<title>SC61860 BASIC POKE Converter</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg:       #0a0c10;
@@ -15,7 +15,6 @@
     --accent2:  #ff6b35;
     --green:    #39ff14;
     --purple:   #c792ea;
-    --yellow:   #e8d87a;
     --dim:      #3a4a5a;
     --text:     #c8d8e8;
     --muted:    #5a7a8a;
@@ -29,68 +28,82 @@
   }
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
   html, body { height: 100%; overflow: hidden; }
+
   body {
-    background: var(--bg); color: var(--text);
+    background: var(--bg);
+    color: var(--text);
     font-family: 'Share Tech Mono', monospace;
-    display: flex; flex-direction: column;
+    display: flex;
+    flex-direction: column;
   }
+
   body::before {
-    content: ''; position: fixed; inset: 0;
-    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.10) 2px, rgba(0,0,0,0.10) 4px);
-    pointer-events: none; z-index: 9999;
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.10) 2px, rgba(0,0,0,0.10) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
   }
 
   /* ── HEADER ── */
   header {
-    flex-shrink: 0; border-bottom: 1px solid var(--border);
-    padding: 14px 28px; display: flex; align-items: center; gap: 20px;
-    background: linear-gradient(180deg, rgba(255,107,53,0.04) 0%, transparent 100%);
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: linear-gradient(180deg, rgba(0,229,255,0.04) 0%, transparent 100%);
     position: relative;
   }
   header::after {
-    content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, var(--accent2), transparent); opacity: 0.45;
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+    opacity: 0.45;
   }
-  .logo { font-family: 'Orbitron', monospace; font-weight: 900; font-size: 20px; color: var(--accent); text-shadow: var(--glow); letter-spacing: 2px; white-space: nowrap; text-decoration: none; }
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900; font-size: 20px;
+    color: var(--accent); text-shadow: var(--glow);
+    letter-spacing: 2px; white-space: nowrap; text-decoration: none;
+  }
   .logo span { color: var(--accent2); text-shadow: 0 0 8px rgba(255,107,53,0.5); }
   .tagline { color: var(--muted); font-size: 11px; letter-spacing: 1px; }
-  .nav-back { font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700; color: var(--muted); text-decoration: none; letter-spacing: 1px; border: 1px solid var(--dim); padding: 5px 12px; border-radius: 2px; transition: all 0.2s; }
-  .nav-back:hover { color: var(--accent); border-color: var(--accent); }
-  .badge { margin-left: auto; font-size: 11px; color: var(--muted); text-align: right; line-height: 1.6; }
-  .badge em { color: var(--accent2); font-style: normal; }
-
-  /* ── DIRECTION TABS ── */
-  .dir-tabs { flex-shrink: 0; display: flex; background: var(--panel); border-bottom: 1px solid var(--border); }
-  .dir-tab {
-    padding: 11px 28px; font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
-    letter-spacing: 1.5px; color: var(--muted); cursor: pointer;
-    border-right: 1px solid var(--border); border-bottom: 2px solid transparent;
-    transition: color 0.15s, border-color 0.15s, background 0.15s; user-select: none; white-space: nowrap;
+  .nav-back {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    color: var(--muted); text-decoration: none; letter-spacing: 1px;
+    border: 1px solid var(--dim); padding: 5px 12px; border-radius: 2px;
+    transition: all 0.2s;
   }
-  .dir-tab:hover { color: var(--text); background: rgba(255,255,255,0.02); }
-  .dir-tab.active { color: var(--accent2); border-bottom-color: var(--accent2); background: rgba(255,107,53,0.04); }
-  .dir-tab .arr { color: var(--dim); margin: 0 6px; }
-  .dir-tab.active .arr { color: var(--accent2); }
+  .nav-back:hover { color: var(--accent); border-color: var(--accent); }
+  .badge {
+    margin-left: auto; font-size: 11px; color: var(--muted);
+    text-align: right; line-height: 1.6;
+  }
+  .badge em { color: var(--accent2); font-style: normal; }
 
   /* ── CONTROLS ── */
   .controls {
-    flex-shrink: 0; background: var(--panel); border-bottom: 1px solid var(--border);
-    padding: 9px 28px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; row-gap: 7px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 9px 28px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    row-gap: 7px;
   }
+
   label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
-  input[type="text"] {
-    background: var(--bg); border: 1px solid var(--border); color: var(--accent2);
-    font-family: 'Share Tech Mono', monospace; font-size: 13px;
-    padding: 5px 9px; border-radius: 2px; outline: none; transition: border-color 0.2s, box-shadow 0.2s;
-  }
-  input[type="text"]:focus { border-color: var(--accent2); box-shadow: 0 0 8px rgba(255,107,53,0.3); }
-  select {
-    background: var(--bg); border: 1px solid var(--border); color: var(--accent2);
-    font-family: 'Share Tech Mono', monospace; font-size: 11px;
-    padding: 4px 8px; border-radius: 2px; outline: none; height: 28px; cursor: pointer;
-  }
-  select option { background: var(--panel); }
+
   .btn {
     font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
     letter-spacing: 1px; padding: 0 15px; border: 1px solid currentColor;
@@ -98,165 +111,179 @@
     transition: all 0.2s; text-transform: uppercase; white-space: nowrap;
     height: 28px; display: flex; align-items: center; gap: 6px;
   }
-  .btn-primary  { color: var(--accent);  border-color: var(--accent); }
+  .btn-primary   { color: var(--accent); border-color: var(--accent); }
   .btn-primary:hover  { background: rgba(0,229,255,0.1); box-shadow: var(--glow); }
-  .btn-orange   { color: var(--accent2); border-color: var(--accent2); }
+  .btn-orange    { color: var(--accent2); border-color: var(--accent2); }
   .btn-orange:hover   { background: rgba(255,107,53,0.1); box-shadow: 0 0 8px rgba(255,107,53,0.4); }
-  .btn-green    { color: var(--green);   border-color: var(--green); }
+  .btn-green     { color: var(--green); border-color: var(--green); }
   .btn-green:hover    { background: rgba(57,255,20,0.08); box-shadow: var(--glow2); }
-  .btn-purple   { color: var(--purple);  border-color: var(--purple); }
-  .btn-purple:hover   { background: rgba(199,146,234,0.08); box-shadow: var(--glow3); }
   .btn-secondary { color: var(--muted); border-color: var(--dim); }
   .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
-  .btn-danger   { color: var(--error);   border-color: var(--error); }
+  .btn-danger    { color: var(--error); border-color: var(--error); }
   .btn-danger:hover   { background: rgba(255,68,68,0.08); }
-  .btn:disabled { opacity: 0.3; pointer-events: none; }
-  .sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
-  .stat-pill { font-size: 11px; color: var(--muted); margin-left: auto; }
-  .stat-pill em { color: var(--green); font-style: normal; font-weight: bold; }
 
-  /* toggle */
+  .sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+
+  /* mode toggle */
   .toggle-group { display: flex; align-items: center; gap: 7px; }
   .toggle-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
   .toggle-wrap {
     position: relative; display: flex; align-items: stretch;
     background: var(--bg); border: 1px solid var(--border);
-    border-radius: 2px; overflow: hidden; cursor: pointer; user-select: none; height: 28px;
+    border-radius: 2px; overflow: hidden; cursor: pointer;
+    user-select: none; height: 28px;
   }
   .toggle-opt {
-    padding: 0 12px; display: flex; align-items: center;
-    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
-    letter-spacing: 1px; color: var(--muted); transition: color 0.18s;
-    position: relative; z-index: 1; white-space: nowrap;
+    padding: 0 14px; display: flex; align-items: center;
+    font-family: 'Orbitron', monospace; font-size: 10px;
+    font-weight: 700; letter-spacing: 1px; color: var(--muted);
+    transition: color 0.18s; position: relative; z-index: 1; white-space: nowrap;
   }
   .toggle-slider {
     position: absolute; top: 2px; bottom: 2px; border-radius: 1px;
     background: rgba(255,107,53,0.12); border: 1px solid rgba(255,107,53,0.55);
-    transition: left 0.16s cubic-bezier(.4,0,.2,1), width 0.16s cubic-bezier(.4,0,.2,1); z-index: 0;
+    transition: left 0.16s cubic-bezier(.4,0,.2,1), width 0.16s cubic-bezier(.4,0,.2,1);
+    z-index: 0;
   }
   .toggle-opt.active { color: var(--accent2); }
 
-  /* ── WORKSPACE ── */
-  .workspace { flex: 1; display: flex; min-height: 0; overflow: hidden; }
-  .pane { display: flex; flex-direction: column; min-width: 120px; min-height: 0; overflow: hidden; }
+  .stat-pill { font-size: 11px; color: var(--muted); margin-left: auto; }
+  .stat-pill em { color: var(--green); font-style: normal; font-weight: bold; }
+
+  /* ── WORKSPACE SPLIT ── */
+  .workspace {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .pane {
+    display: flex;
+    flex-direction: column;
+    min-width: 120px;
+    min-height: 0;
+    overflow: hidden;
+  }
   #pane-left  { flex: 0 0 auto; width: 44%; }
   #pane-right { flex: 1 1 0; }
 
   .pane-header {
-    flex-shrink: 0; padding: 9px 18px; background: var(--panel);
-    border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted);
-    letter-spacing: 2px; text-transform: uppercase; display: flex; align-items: center; gap: 8px;
+    flex-shrink: 0;
+    padding: 9px 18px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px; color: var(--muted);
+    letter-spacing: 2px; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
   }
   .pane-header .dot {
     width: 6px; height: 6px; border-radius: 50%;
     background: var(--accent2); box-shadow: 0 0 8px rgba(255,107,53,0.6);
     animation: pulse 2s infinite; flex-shrink: 0;
   }
-  .pane-header .dot.green  { background: var(--green);  box-shadow: var(--glow2); }
-  .pane-header .dot.accent { background: var(--accent);  box-shadow: var(--glow); }
-  .pane-header .dot.purple { background: var(--purple);  box-shadow: var(--glow3); }
+  .pane-header .dot.green { background: var(--green); box-shadow: var(--glow2); }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-  .code-input {
-    flex: 1; background: var(--bg); border: none;
-    font-family: 'Share Tech Mono', monospace; font-size: 13px; line-height: 1.7;
+  #bas-input {
+    flex: 1;
+    background: var(--bg); border: none;
+    color: var(--accent2);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; line-height: 1.7;
     padding: 18px; resize: none; outline: none; letter-spacing: 0.3px;
+    tab-size: 4;
   }
-  .code-input::placeholder { color: var(--dim); }
-  #bas-input { color: var(--accent2); }
-  #hex-input { color: var(--accent); }
-  .code-input::-webkit-scrollbar { width: 6px; }
-  .code-input::-webkit-scrollbar-track { background: var(--bg); }
-  .code-input::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+  #bas-input::placeholder { color: var(--dim); }
 
-  /* splitter */
+  /* ── SPLITTER ── */
   #splitter {
-    flex-shrink: 0; width: 6px; background: var(--border); cursor: col-resize;
-    position: relative; transition: background 0.15s; user-select: none;
+    flex-shrink: 0; width: 6px;
+    background: var(--border);
+    cursor: col-resize;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+    position: relative;
   }
-  #splitter:hover, #splitter.dragging { background: var(--accent2); box-shadow: 0 0 10px rgba(255,107,53,0.35); }
-  #splitter::before {
-    content: ''; position: absolute; top: 50%; left: 50%;
-    transform: translate(-50%,-50%); width: 2px; height: 32px;
-    background: repeating-linear-gradient(180deg, var(--muted) 0, var(--muted) 2px, transparent 2px, transparent 5px);
-    border-radius: 1px; opacity: 0.5;
+  #splitter:hover, #splitter.dragging { background: var(--accent2); }
+  #splitter::after {
+    content: '⋮';
+    color: var(--dim); font-size: 14px;
+    position: absolute; top: 50%; transform: translateY(-50%);
+    pointer-events: none;
   }
-  #splitter:hover::before, #splitter.dragging::before { opacity: 1; }
 
-  /* right pane output */
-  .out-tabs { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--panel); }
-  .out-tab {
-    padding: 8px 18px; font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
-    letter-spacing: 1px; color: var(--muted); cursor: pointer; border-right: 1px solid var(--border);
-    transition: color 0.15s, background 0.15s; user-select: none; white-space: nowrap;
+  /* ── OUTPUT PANE ── */
+  #output-area {
+    flex: 1; overflow-y: auto; overflow-x: auto;
+    padding: 18px 22px;
+    font-size: 13px; line-height: 1.75; letter-spacing: 0.3px;
   }
-  .out-tab:hover { color: var(--text); }
-  .out-tab.active { color: var(--accent2); background: rgba(255,107,53,0.06); }
+  #output-area::-webkit-scrollbar { width: 6px; height: 6px; }
+  #output-area::-webkit-scrollbar-track { background: var(--bg); }
+  #output-area::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
 
-  .out-scroll { flex: 1; overflow: auto; background: var(--bg); }
-  .out-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-  .out-scroll::-webkit-scrollbar-track { background: var(--bg); }
-  .out-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-  .out-inner { padding: 18px 22px; font-size: 13px; line-height: 1.75; letter-spacing: 0.3px; }
-
-  /* b2h hex dump output */
-  .out-block-hdr {
+  /* hex dump output */
+  .out-block-header {
     color: var(--muted); font-size: 11px; letter-spacing: 2px;
-    border-bottom: 1px solid var(--border); padding-bottom: 4px; margin-bottom: 8px; margin-top: 18px;
+    border-bottom: 1px solid var(--border); padding-bottom: 4px; margin-bottom: 8px;
+    margin-top: 18px;
   }
-  .out-block-hdr:first-child { margin-top: 0; }
-  .out-row { display: flex; white-space: pre; }
-  .o-addr   { color: var(--addr); min-width: 52px; }
-  .o-hex    { color: var(--hex); }
-  .o-sep    { color: var(--dim); padding: 0 6px; }
-  .o-ascii  { color: var(--muted); }
-  .o-ascii .p { color: var(--ascii); }
+  .out-block-header:first-child { margin-top: 0; }
+
+  .out-row { display: flex; gap: 0; white-space: pre; }
+  .out-addr { color: var(--addr); min-width: 52px; }
+  .out-colon { color: var(--dim); }
+  .out-hex-group { color: var(--hex); min-width: 52px; /* 3 chars × n */ }
+  .out-ascii-sep { color: var(--dim); padding: 0 6px; }
+  .out-ascii { color: var(--muted); }
+  .out-ascii .printable { color: var(--ascii); }
+
+  /* pure hex mode */
   .out-pure { color: var(--hex); word-break: break-all; line-height: 2; letter-spacing: 1px; }
-  .out-pure .a { color: var(--accent2); }
+  .out-pure span { color: var(--accent2); }  /* address markers */
 
-  /* h2b basic output */
-  .basic-line { white-space: pre; font-family: 'Share Tech Mono', monospace; line-height: 1.75; }
-  .bl-num  { color: var(--muted); }
-  .bl-poke { color: var(--accent2); font-weight: bold; }
-  .bl-addr { color: var(--yellow); }
-  .bl-sep  { color: var(--dim); }
-  .bl-hex  { color: var(--accent); }
-  .bl-dec  { color: var(--green); }
-
-  /* summary */
-  .sum-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
-    gap: 1px; background: var(--border); border: 1px solid var(--border);
-    border-radius: 2px; overflow: hidden; margin-bottom: 20px;
+  /* summary block */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px; background: var(--border);
+    border: 1px solid var(--border); border-radius: 2px;
+    overflow: hidden; margin-bottom: 20px;
   }
-  .sum-cell { background: var(--panel); padding: 11px 15px; }
-  .sum-key  { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 5px; }
-  .sum-val  { font-size: 14px; color: var(--accent); font-family: 'Orbitron', monospace; font-weight: 700; }
-  .sum-val.or { color: var(--accent2); }
-  .sum-val.gr { color: var(--green); }
-  .sum-val.pu { color: var(--purple); }
+  .summary-cell {
+    background: var(--panel); padding: 12px 16px;
+  }
+  .summary-key { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 5px; }
+  .summary-val { font-size: 14px; color: var(--accent); font-family: 'Orbitron', monospace; font-weight: 700; }
+  .summary-val.orange { color: var(--accent2); }
+  .summary-val.green  { color: var(--green); }
+  .summary-val.purple { color: var(--purple); }
 
-  /* empty */
+  /* error display */
+  .out-error { color: var(--error); font-size: 12px; padding: 4px 0; }
+
+  /* empty state */
   .empty-state {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    height: 100%; gap: 12px; color: var(--dim);
-    font-family: 'VT323', monospace; font-size: 20px; text-align: center; padding: 40px;
+    height: 100%; gap: 14px; opacity: 0.35;
   }
-  .empty-state pre { font-size: 11px; line-height: 1.4; color: var(--border); font-family: 'Share Tech Mono', monospace; }
+  .empty-state svg { opacity: 0.5; }
+  .empty-state p { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-align: center; line-height: 1.8; }
 
-  .out-error { color: var(--error); font-size: 12px; padding: 3px 0; }
-
-  #pane-left.drag-over .code-input { outline: 1px dashed var(--accent2); background: rgba(255,107,53,0.03); }
-
-  @media (max-width:700px) {
-    .workspace { flex-direction: column; }
-    #pane-left { width: 100% !important; flex: 0 0 200px; }
-    #splitter { width: 100%; height: 6px; cursor: row-resize; }
-    header { padding: 11px 14px; }
-    .controls { padding: 8px 14px; }
+  /* file drop zone highlight */
+  #pane-left.drag-over #bas-input {
+    border: 1px dashed var(--accent2);
+    background: rgba(255,107,53,0.04);
   }
+
+  /* scrollbar */
+  #bas-input::-webkit-scrollbar { width: 6px; }
+  #bas-input::-webkit-scrollbar-track { background: var(--bg); }
+  #bas-input::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
 </style>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
 </head>
 <body>
 
@@ -264,533 +291,545 @@
   <a class="logo" href="index.html">SC<span>61860</span></a>
   <div>
     <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:700;color:var(--accent2);letter-spacing:2px">POKE CONVERTER</div>
-    <div class="tagline" id="tagline">BASIC → HEX / BINARY EXTRACTOR</div>
+    <div class="tagline">BASIC → HEX / BINARY EXTRACTOR</div>
   </div>
   <a class="nav-back" href="index.html">← INDEX</a>
-  <div class="badge"><em>SHARP PC-12xx/13xx/14xx</em><br>POKE &amp;ADDR, val, val, …</div>
+  <div class="badge">
+    <em>SHARP PC-12xx/13xx/14xx</em><br>
+    POKE &amp;ADDR, val, val, …
+  </div>
 </header>
 
-<!-- Direction tabs -->
-<div class="dir-tabs">
-  <div class="dir-tab active" id="tab-b2h" onclick="setDir('b2h')">
-    BASIC <span class="arr">→</span> HEX / BINARY
-  </div>
-  <div class="dir-tab" id="tab-h2b" onclick="setDir('h2b')">
-    HEX / BINARY <span class="arr">→</span> BASIC POKE
-  </div>
-</div>
-
-<!-- Controls B2H -->
-<div class="controls" id="ctrl-b2h">
+<div class="controls">
+  <!-- mode toggle -->
   <div class="toggle-group">
-    <span class="toggle-label">VIEW</span>
-    <div class="toggle-wrap" onclick="cycleB2HView()">
-      <div class="toggle-opt active" id="v-dump">HEX DUMP</div>
-      <div class="toggle-opt"        id="v-pure">PURE HEX</div>
-      <div class="toggle-slider" id="v-slider"></div>
+    <span class="toggle-label">OUTPUT</span>
+    <div class="toggle-wrap" id="mode-toggle" onclick="cycleMode()">
+      <div class="toggle-opt active" id="mode-hex-dump">HEX DUMP</div>
+      <div class="toggle-opt" id="mode-pure-hex">PURE HEX</div>
+      <div class="toggle-slider" id="mode-slider"></div>
     </div>
   </div>
+
   <div class="sep"></div>
-  <label>ROW</label>
-  <select id="bpr-sel" onchange="runConvert()" style="width:62px">
-    <option value="8">8</option><option value="16" selected>16</option><option value="32">32</option>
+
+  <!-- bytes per row -->
+  <label for="bpr-sel">ROW WIDTH</label>
+  <select id="bpr-sel" onchange="convert()" style="width:70px">
+    <option value="8">8</option>
+    <option value="16" selected>16</option>
+    <option value="32">32</option>
   </select>
+
   <div class="sep"></div>
-  <button class="btn btn-orange" onclick="runConvert()">▶ CONVERT</button>
-  <button class="btn btn-secondary" onclick="triggerLoad('bas')">↑ LOAD .BAS</button>
-  <button class="btn btn-secondary" onclick="clearAll()">✕ CLEAR</button>
+
+  <button class="btn btn-orange" onclick="convert()">▶ CONVERT</button>
+  <button class="btn btn-secondary" onclick="loadFile()">↑ LOAD FILE</button>
+  <button class="btn btn-secondary" onclick="clearInput()">✕ CLEAR</button>
+  <input type="file" id="file-input" accept=".bas,.txt,.BAS" style="display:none" onchange="handleFile(event)">
+
   <div class="sep"></div>
-  <button class="btn btn-green"   id="b2h-dl-hex" onclick="b2hDlHex()" disabled>↓ HEX</button>
-  <button class="btn btn-primary" id="b2h-dl-bin" onclick="b2hDlBin()" disabled>↓ BINARY</button>
-  <button class="btn btn-secondary" id="b2h-disasm" onclick="sendToDisasm()" disabled>→ DISASM</button>
+
+  <button class="btn btn-green" id="dl-hex-btn" onclick="downloadHex()" disabled>↓ HEX TXT</button>
+  <button class="btn btn-primary" id="dl-bin-btn" onclick="downloadBin()" disabled>↓ BINARY</button>
+  <button class="btn btn-secondary" id="dl-disasm-btn" onclick="sendToDisasm()" disabled title="Open extracted bytes in Disassembler">→ DISASM</button>
+
   <div class="sep"></div>
-  <div class="stat-pill" id="pill-b2h">NO INPUT</div>
+  <div class="stat-pill" id="stat-pill">NO INPUT</div>
 </div>
 
-<!-- Controls H2B -->
-<div class="controls" id="ctrl-h2b" style="display:none">
-  <label>ORG</label>
-  <input type="text" id="org-addr" value="8000" maxlength="5" style="width:72px" spellcheck="false" title="Load address for first byte (hex)">
-  <div class="sep"></div>
-  <label>LINE</label>
-  <input type="text" id="line-start" value="100" maxlength="5" style="width:54px" spellcheck="false" title="First BASIC line number">
-  <label>STEP</label>
-  <input type="text" id="line-step" value="10" maxlength="4" style="width:44px" spellcheck="false" title="Line number increment">
-  <div class="sep"></div>
-  <label>BYTES/POKE</label>
-  <select id="bpp-sel" onchange="runConvert()" style="width:54px">
-    <option value="8">8</option><option value="16" selected>16</option><option value="24">24</option>
-  </select>
-  <div class="toggle-group" style="margin-left:2px">
-    <span class="toggle-label">VALS</span>
-    <div class="toggle-wrap" onclick="cycleValFmt()">
-      <div class="toggle-opt active" id="vf-hex">HEX</div>
-      <div class="toggle-opt"        id="vf-dec">DEC</div>
-      <div class="toggle-slider" id="vf-slider"></div>
-    </div>
-  </div>
-  <div class="sep"></div>
-  <button class="btn btn-orange" onclick="runConvert()">▶ GENERATE</button>
-  <button class="btn btn-secondary" onclick="triggerLoad('hex')">↑ LOAD FILE</button>
-  <button class="btn btn-secondary" onclick="clearAll()">✕ CLEAR</button>
-  <div class="sep"></div>
-  <button class="btn btn-green"     id="h2b-dl" onclick="h2bDl()" disabled>↓ SAVE .BAS</button>
-  <button class="btn btn-secondary" id="h2b-copy" onclick="h2bCopy()" disabled>COPY</button>
-  <div class="sep"></div>
-  <div class="stat-pill" id="pill-h2b">NO INPUT</div>
-</div>
-
-<input type="file" id="bas-file-in" accept=".bas,.txt,.BAS" style="display:none" onchange="onBasFile(event)">
-<input type="file" id="hex-file-in" accept=".bin,.hex,.txt,*" style="display:none" onchange="onHexFile(event)">
-
-<!-- Workspace -->
+<!-- workspace -->
 <div class="workspace" id="workspace">
 
-  <!-- LEFT -->
+  <!-- LEFT: BASIC input -->
   <div class="pane" id="pane-left">
-    <div class="pane-header" id="lh-b2h">
-      <div class="dot"></div>BASIC SOURCE
-      <span style="margin-left:auto;font-size:10px;color:var(--dim)">DROP .BAS OR PASTE</span>
+    <div class="pane-header">
+      <div class="dot"></div>
+      BASIC SOURCE
+      <span style="margin-left:auto;font-size:10px;color:var(--dim)">DROP .BAS FILE OR PASTE</span>
     </div>
-    <div class="pane-header" id="lh-h2b" style="display:none">
-      <div class="dot accent"></div>HEX / BINARY INPUT
-      <span style="margin-left:auto;font-size:10px;color:var(--dim)">PASTE HEX OR DROP .BIN</span>
-    </div>
-    <textarea id="bas-input" class="code-input" spellcheck="false"
-      placeholder="10: REM SHARP BASIC machine code loader&#10;100: POKE &amp;8030,&amp;79,&amp;82,&amp;8C,&amp;79&#10;110: POKE &amp;8040,&amp;84,&amp;F3,&amp;79,&amp;83&#10;&#10;; Both hex (&amp;XX) and decimal values supported"></textarea>
-    <textarea id="hex-input" class="code-input" spellcheck="false" style="display:none"
-      placeholder="Paste space/comma/newline-separated hex bytes:&#10;79 82 8C 79 86 61 79 83&#10;84 F3 79 83 F1 79 83 A7&#10;&#10;Or drag and drop a .bin binary file"></textarea>
+    <textarea id="bas-input" spellcheck="false"
+      placeholder="10: REM paste SHARP BASIC source here&#10;100: POKE &amp;8030,&amp;79,&amp;82,&amp;8C,&amp;79&#10;110: POKE &amp;8040,&amp;84,&amp;F3,&amp;79,&amp;83&#10;&#10;; both hex (&amp;XX) and decimal values supported"></textarea>
   </div>
 
   <!-- SPLITTER -->
   <div id="splitter"></div>
 
-  <!-- RIGHT -->
+  <!-- RIGHT: output -->
   <div class="pane" id="pane-right">
-
-    <!-- B2H right -->
-    <div id="rp-b2h" style="display:flex;flex-direction:column;flex:1;min-height:0">
-      <div class="out-tabs">
-        <div class="out-tab active" id="ot-dump"    onclick="setOutTab('dump')">HEX DUMP</div>
-        <div class="out-tab"        id="ot-pure"    onclick="setOutTab('pure')">PURE HEX</div>
-      </div>
-      <div class="out-scroll">
-        <div class="out-inner" id="b2h-inner">
-          <div class="empty-state"><pre> ┌──────────────┐
- │  BASIC       │
- │  → HEX       │
- └──────────────┘</pre>PASTE BASIC AND PRESS CONVERT</div>
-        </div>
+    <div class="pane-header">
+      <div class="dot green"></div>
+      <span id="pane-right-title">OUTPUT</span>
+    </div>
+    <div id="output-area">
+      <div class="empty-state" id="empty-state">
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="8" y="8" width="48" height="48" rx="4" stroke="#3a4a5a" stroke-width="1.5"/>
+          <line x1="16" y1="20" x2="48" y2="20" stroke="#3a4a5a" stroke-width="1"/>
+          <line x1="16" y1="28" x2="48" y2="28" stroke="#3a4a5a" stroke-width="1"/>
+          <line x1="16" y1="36" x2="40" y2="36" stroke="#3a4a5a" stroke-width="1"/>
+          <line x1="16" y1="44" x2="34" y2="44" stroke="#3a4a5a" stroke-width="1"/>
+          <circle cx="50" cy="50" r="10" fill="#0a0c10" stroke="#ff6b35" stroke-width="1.5"/>
+          <text x="50" y="54" text-anchor="middle" font-family="monospace" font-size="10" fill="#ff6b35">→</text>
+        </svg>
+        <p>PASTE BASIC SOURCE<br>OR LOAD A .BAS FILE<br>THEN PRESS ▶ CONVERT</p>
       </div>
     </div>
-
-    <!-- H2B right -->
-    <div id="rp-h2b" style="display:none;flex-direction:column;flex:1;min-height:0">
-      <div class="pane-header">
-        <div class="dot purple"></div>BASIC POKE OUTPUT
-      </div>
-      <div class="out-scroll">
-        <div class="out-inner" id="h2b-inner">
-          <div class="empty-state"><pre> ┌──────────────┐
- │  HEX         │
- │  → BASIC     │
- └──────────────┘</pre>PASTE HEX OR DROP A BINARY FILE</div>
-        </div>
-      </div>
-    </div>
-
   </div>
+
 </div>
 
 <script>
-'use strict';
-
 // ── State ──────────────────────────────────────────────────────────────
-let dir        = 'b2h';   // 'b2h' | 'h2b'
-let b2hView    = 'dump';  // 'dump' | 'pure'
-let valFmt     = 'hex';   // 'hex' | 'dec'
-let lastMemory = null;    // Map<addr,byte> — b2h result
-let lastBasic  = '';      // generated BASIC text — h2b result
-let lastFname  = 'output';
-let debTimer   = null;
+let lastMemory = null;   // Map: addr → byte
+let lastFilename = 'output';
+let currentMode = 0;     // 0 = hex dump, 1 = pure hex
 
-// ── Helpers ────────────────────────────────────────────────────────────
-const h2  = v => (v&0xFF).toString(16).toUpperCase().padStart(2,'0');
-const h4  = v => (v&0xFFFF).toString(16).toUpperCase().padStart(4,'0');
-const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+// ── Mode toggle ────────────────────────────────────────────────────────
+const modeOpts  = ['mode-hex-dump', 'mode-pure-hex'];
+const modeNames = ['HEX DUMP', 'PURE HEX'];
 
-function sortedAddrs(m) { return [...m.keys()].sort((a,b)=>a-b); }
-function getBlocks(addrs) {
-  if (!addrs.length) return [];
-  const bl=[]; let cur=[addrs[0]];
-  for (let i=1;i<addrs.length;i++) {
-    if (addrs[i]===addrs[i-1]+1) cur.push(addrs[i]);
-    else { bl.push(cur); cur=[addrs[i]]; }
-  }
-  bl.push(cur); return bl;
-}
-function slideToggle(sliderId, activeId) {
-  const sl=document.getElementById(sliderId), ac=document.getElementById(activeId);
-  if (sl&&ac){sl.style.left=ac.offsetLeft+'px';sl.style.width=ac.offsetWidth+'px';}
-}
-function triggerDownload(blob, name) {
-  const url=URL.createObjectURL(blob), a=document.createElement('a');
-  a.href=url;a.download=name;document.body.appendChild(a);a.click();
-  document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(url),1000);
-}
-function makeSumGrid(cells) {
-  const g=document.createElement('div');g.className='sum-grid';
-  for (const [k,v,c] of cells) {
-    const d=document.createElement('div');d.className='sum-cell';
-    d.innerHTML=`<div class="sum-key">${esc(k)}</div><div class="sum-val ${c||''}">${esc(v)}</div>`;
-    g.appendChild(d);
-  }
-  return g;
+function cycleMode() {
+  currentMode = (currentMode + 1) % 2;
+  updateModeUI();
+  if (lastMemory) renderOutput(lastMemory);
 }
 
-// ── Direction switch ───────────────────────────────────────────────────
-function setDir(d) {
-  dir = d;
-  ['b2h','h2b'].forEach(x => {
-    document.getElementById('tab-'+x).classList.toggle('active', x===d);
-    document.getElementById('ctrl-'+x).style.display = x===d ? 'flex' : 'none';
-    document.getElementById('lh-'+x).style.display   = x===d ? 'flex' : 'none';
-    document.getElementById('rp-'+x).style.display   = x===d ? 'flex' : 'none';
+function updateModeUI() {
+  modeOpts.forEach((id, i) => {
+    document.getElementById(id).classList.toggle('active', i === currentMode);
   });
-  document.getElementById('bas-input').style.display = d==='b2h' ? 'flex':'none';
-  document.getElementById('hex-input').style.display = d==='h2b' ? 'flex':'none';
-  document.getElementById('tagline').textContent =
-    d==='b2h' ? 'BASIC → HEX / BINARY EXTRACTOR' : 'HEX / BINARY → BASIC POKE GENERATOR';
+  // slide the slider
+  const wrap   = document.getElementById('mode-toggle');
+  const slider = document.getElementById('mode-slider');
+  const active = document.getElementById(modeOpts[currentMode]);
+  slider.style.left  = active.offsetLeft + 'px';
+  slider.style.width = active.offsetWidth + 'px';
+  document.getElementById('pane-right-title').textContent =
+    modeNames[currentMode] + ' OUTPUT';
 }
 
-// ── View toggles ───────────────────────────────────────────────────────
-function cycleB2HView() {
-  b2hView = b2hView==='dump'?'pure':'dump';
-  document.getElementById('v-dump').classList.toggle('active', b2hView==='dump');
-  document.getElementById('v-pure').classList.toggle('active', b2hView==='pure');
-  slideToggle('v-slider', b2hView==='dump'?'v-dump':'v-pure');
-  if (lastMemory) renderB2H(lastMemory);
-}
-function setOutTab(t) {
-  b2hView = t;
-  document.getElementById('ot-dump').classList.toggle('active', t==='dump');
-  document.getElementById('ot-pure').classList.toggle('active', t==='pure');
-  if (lastMemory) renderB2H(lastMemory);
-}
-function cycleValFmt() {
-  valFmt = valFmt==='hex'?'dec':'hex';
-  document.getElementById('vf-hex').classList.toggle('active', valFmt==='hex');
-  document.getElementById('vf-dec').classList.toggle('active', valFmt==='dec');
-  slideToggle('vf-slider', valFmt==='hex'?'vf-hex':'vf-dec');
-  if (lastBasic) runConvert();
-}
+// init slider position
+window.addEventListener('load', () => { updateModeUI(); initSplitter(); });
 
-// ── Master dispatch ────────────────────────────────────────────────────
-function runConvert() { dir==='b2h' ? convertB2H() : convertH2B(); }
-
-// ══════════════════════════════════════════════════════════════════════
-// B2H — BASIC → HEX
-// ══════════════════════════════════════════════════════════════════════
-function parseVal(tok) {
-  tok = tok.trim();
-  if (/^&[0-9A-Fa-f]+$/.test(tok)) return parseInt(tok.slice(1),16);
-  if (/^\d+$/.test(tok)) return parseInt(tok,10);
+// ── Parser ─────────────────────────────────────────────────────────────
+function parseValue(token) {
+  token = token.trim();
+  if (!token) return null;
+  if (token.startsWith('&') || token.startsWith('&')) {
+    const h = token.slice(1);
+    if (!/^[0-9A-Fa-f]+$/.test(h)) return null;
+    return parseInt(h, 16);
+  }
+  if (/^\d+$/.test(token)) return parseInt(token, 10);
   return null;
 }
-function extractPokes(src) {
-  const mem=new Map(), errs=[];
-  const re=/\bPOKE\s+(&[0-9A-Fa-f]+|\d+)\s*,\s*(.+)/gi;
-  for (const line of src.split('\n')) {
-    const s=line.replace(/^\s*\d+\s*/,'').trim();
-    let m; re.lastIndex=0;
-    while ((m=re.exec(s))!==null) {
-      let addr=parseVal(m[1]);
-      if (addr===null){errs.push('Bad address: '+m[1]);continue;}
-      for (const tok of m[2].split(',')) {
-        const v=parseVal(tok); if (v===null) break;
-        mem.set(addr++, v&0xFF);
+
+function extractPokes(source) {
+  const memory = new Map();
+  const errors  = [];
+  const pokeRe  = /\bPOKE\s+(&[0-9A-Fa-f]+|\d+)\s*,\s*(.+)/gi;
+  const lines   = source.split('\n');
+
+  for (const line of lines) {
+    const stripped = line.replace(/^\s*\d+\s*/, '').trim();
+    let m;
+    pokeRe.lastIndex = 0;
+    while ((m = pokeRe.exec(stripped)) !== null) {
+      const addrToken = m[1];
+      let addr = parseValue(addrToken);
+      if (addr === null) { errors.push(`Bad address: ${addrToken}`); continue; }
+
+      const valStr = m[2];
+      const tokens = valStr.split(',');
+      for (const tok of tokens) {
+        const t = tok.trim();
+        if (!t) continue;
+        const v = parseValue(t);
+        if (v === null) break;   // hit a non-value token (next statement)
+        memory.set(addr, v & 0xFF);
+        addr++;
       }
     }
   }
-  return {mem, errs};
+  return { memory, errors };
 }
-function convertB2H() {
-  const src=document.getElementById('bas-input').value;
-  if (!src.trim()){setPill('b2h','NO INPUT');return;}
-  const {mem,errs}=extractPokes(src);
-  lastMemory=mem;
-  renderB2H(mem, errs);
-  const ok=mem.size>0;
-  ['b2h-dl-hex','b2h-dl-bin','b2h-disasm'].forEach(id=>document.getElementById(id).disabled=!ok);
-  if (!ok){setPill('b2h','NO POKE STATEMENTS FOUND');return;}
-  const a=sortedAddrs(mem);
-  setPill('b2h',`<em>${mem.size}</em> BYTES  $${h4(a[0])}–$${h4(a[a.length-1])}`);
+
+// ── Render ─────────────────────────────────────────────────────────────
+function sortedAddrs(memory) {
+  return [...memory.keys()].sort((a, b) => a - b);
 }
-function renderB2H(mem, errs) {
-  const el=document.getElementById('b2h-inner');
-  el.innerHTML='';
-  if (!mem||mem.size===0) {
-    el.innerHTML='<div class="empty-state"><pre> ┌──────────────┐\n │  BASIC       │\n │  → HEX       │\n └──────────────┘</pre>NO POKE DATA FOUND</div>';
-    return;
+
+function getBlocks(addrs) {
+  if (!addrs.length) return [];
+  const blocks = [];
+  let cur = [addrs[0]];
+  for (let i = 1; i < addrs.length; i++) {
+    if (addrs[i] === addrs[i-1] + 1) cur.push(addrs[i]);
+    else { blocks.push(cur); cur = [addrs[i]]; }
   }
-  if (errs&&errs.length) {
-    const ed=document.createElement('div');
-    errs.forEach(e=>{const p=document.createElement('div');p.className='out-error';p.textContent='⚠ '+e;ed.appendChild(p);});
-    el.appendChild(ed);
-  }
-  const addrs=sortedAddrs(mem), blocks=getBlocks(addrs);
-  const gaps=(addrs[addrs.length-1]-addrs[0]+1)-mem.size;
-  el.appendChild(makeSumGrid([
-    ['START',`$${h4(addrs[0])}`,''],['END',`$${h4(addrs[addrs.length-1])}`,'or'],
-    ['BYTES',mem.size.toString(),'gr'],['BLOCKS',blocks.length.toString(),''],
-    ['SPAN',(addrs[addrs.length-1]-addrs[0]+1)+' B','or'],['GAPS',gaps.toString(),gaps>0?'pu':''],
-  ]));
-  el.appendChild(b2hView==='dump' ? buildHexDump(mem) : buildPureHex(mem));
+  blocks.push(cur);
+  return blocks;
 }
-function buildHexDump(mem) {
-  const bpr=parseInt(document.getElementById('bpr-sel').value);
-  const addrs=sortedAddrs(mem), blocks=getBlocks(addrs), frag=document.createDocumentFragment();
-  for (const blk of blocks) {
-    const s=blk[0], e=blk[blk.length-1];
-    const hdr=document.createElement('div');hdr.className='out-block-hdr';
-    hdr.textContent=`; Block $${h4(s)}–$${h4(e)}  (${blk.length} bytes)`;frag.appendChild(hdr);
-    for (let rs=s;rs<=e;rs+=bpr) {
-      const re2=Math.min(rs+bpr-1,e), row=document.createElement('div');row.className='out-row';
-      const ae=document.createElement('span');ae.className='o-addr';ae.textContent=`  ${h4(rs)}:  `;row.appendChild(ae);
-      const he=document.createElement('span');he.className='o-hex';
-      const hc=[];for(let a=rs;a<=rs+bpr-1;a++)hc.push(a<=re2?h2(mem.get(a)):'  ');
-      he.textContent=hc.join(' ');row.appendChild(he);
-      const sep=document.createElement('span');sep.className='o-sep';sep.textContent='  |';row.appendChild(sep);
-      const ac=document.createElement('span');ac.className='o-ascii';
-      for(let a=rs;a<=re2;a++){const v=mem.get(a),ch=(v>=32&&v<=126)?String.fromCharCode(v):'.';const s2=document.createElement('span');if(v>=32&&v<=126)s2.className='p';s2.textContent=ch;ac.appendChild(s2);}
-      row.appendChild(ac);
-      const sep2=document.createElement('span');sep2.className='o-sep';sep2.textContent='|';row.appendChild(sep2);
+
+function hex2(n) { return n.toString(16).toUpperCase().padStart(2, '0'); }
+function hex4(n) { return n.toString(16).toUpperCase().padStart(4, '0'); }
+
+function renderHexDump(memory, bpr) {
+  const addrs  = sortedAddrs(memory);
+  const blocks = getBlocks(addrs);
+  const frag   = document.createDocumentFragment();
+
+  for (const block of blocks) {
+    const startA = block[0], endA = block[block.length - 1];
+
+    // block header
+    const hdr = document.createElement('div');
+    hdr.className = 'out-block-header';
+    hdr.textContent = `; Block $${hex4(startA)}–$${hex4(endA)}  (${block.length} bytes)`;
+    frag.appendChild(hdr);
+
+    for (let rowStart = startA; rowStart <= endA; rowStart += bpr) {
+      const rowEnd = Math.min(rowStart + bpr - 1, endA);
+      const row    = document.createElement('div');
+      row.className = 'out-row';
+
+      // address
+      const addrEl = document.createElement('span');
+      addrEl.className = 'out-addr';
+      addrEl.textContent = `  ${hex4(rowStart)}:  `;
+      row.appendChild(addrEl);
+
+      // hex bytes
+      const hexEl = document.createElement('span');
+      hexEl.className = 'out-hex-group';
+      const hexCells = [];
+      for (let a = rowStart; a <= rowStart + bpr - 1; a++) {
+        if (a <= rowEnd) hexCells.push(hex2(memory.get(a)));
+        else             hexCells.push('  ');
+      }
+      hexEl.textContent = hexCells.join(' ');
+      row.appendChild(hexEl);
+
+      // separator
+      const sep = document.createElement('span');
+      sep.className = 'out-ascii-sep';
+      sep.textContent = '  |';
+      row.appendChild(sep);
+
+      // ASCII
+      const ascEl = document.createElement('span');
+      ascEl.className = 'out-ascii';
+      for (let a = rowStart; a <= rowEnd; a++) {
+        const v   = memory.get(a);
+        const ch  = (v >= 0x20 && v <= 0x7E) ? String.fromCharCode(v) : '.';
+        const sp  = document.createElement('span');
+        if (v >= 0x20 && v <= 0x7E) sp.className = 'printable';
+        sp.textContent = ch;
+        ascEl.appendChild(sp);
+      }
+      row.appendChild(ascEl);
+
+      const sep2 = document.createElement('span');
+      sep2.className = 'out-ascii-sep';
+      sep2.textContent = '|';
+      row.appendChild(sep2);
+
       frag.appendChild(row);
     }
+
+    // spacer
     frag.appendChild(document.createElement('br'));
   }
   return frag;
 }
-function buildPureHex(mem) {
-  const bpr=parseInt(document.getElementById('bpr-sel').value);
-  const addrs=sortedAddrs(mem),blocks=getBlocks(addrs),frag=document.createDocumentFragment();
-  for (const blk of blocks) {
-    const hdr=document.createElement('div');hdr.className='out-block-hdr';
-    hdr.textContent=`; $${h4(blk[0])}  (${blk.length} bytes)`;frag.appendChild(hdr);
-    const cont=document.createElement('div');cont.className='out-pure';
-    let lb=[],ls=blk[0];
-    const flush=start=>{if(!lb.length)return;const am=document.createElement('span');am.className='a';am.textContent=`$${h4(start)}: `;cont.appendChild(am);cont.appendChild(document.createTextNode(lb.join(' ')+'\n'));lb=[];};
-    for(let i=0;i<blk.length;i++){if(i>0&&i%bpr===0){flush(ls);ls=blk[i];}lb.push(h2(mem.get(blk[i])));}
-    flush(ls);frag.appendChild(cont);frag.appendChild(document.createElement('br'));
+
+function renderPureHex(memory, bpr) {
+  const addrs  = sortedAddrs(memory);
+  const blocks = getBlocks(addrs);
+  const frag   = document.createDocumentFragment();
+
+  for (const block of blocks) {
+    const hdr = document.createElement('div');
+    hdr.className = 'out-block-header';
+    hdr.textContent = `; $${hex4(block[0])}  (${block.length} bytes)`;
+    frag.appendChild(hdr);
+
+    const container = document.createElement('div');
+    container.className = 'out-pure';
+
+    let lineBytes = [];
+    let lineStart  = block[0];
+
+    const flush = (start) => {
+      if (!lineBytes.length) return;
+      const addrMark = document.createElement('span');
+      addrMark.textContent = `$${hex4(start)}: `;
+      container.appendChild(addrMark);
+
+      const t = document.createTextNode(lineBytes.join(' ') + '\n');
+      container.appendChild(t);
+      lineBytes = [];
+    };
+
+    for (let i = 0; i < block.length; i++) {
+      if (i > 0 && i % bpr === 0) { flush(lineStart); lineStart = block[i]; }
+      lineBytes.push(hex2(memory.get(block[i])));
+    }
+    flush(lineStart);
+
+    frag.appendChild(container);
+    frag.appendChild(document.createElement('br'));
   }
   return frag;
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// H2B — HEX / BINARY → BASIC POKE
-// ══════════════════════════════════════════════════════════════════════
-function parseHexBlob(src) {
-  return src.split('\n')
-    .map(l => l.replace(/^[\s$]*[0-9A-Fa-f]{1,5}\s*:\s*/,''))   // strip "ADDR:" prefixes
-    .join(' ')
-    .replace(/[^0-9a-fA-F]/g,' ').trim()
-    .split(/\s+/).filter(Boolean)
-    .map(s => { if(s.length===1)s='0'+s; return s.slice(0,2); })
-    .map(s => parseInt(s,16))
-    .filter(n => !isNaN(n) && n>=0 && n<=255);
-}
-function genBasic(bytes, org, lineStart, lineStep, bpp, fmt) {
-  const lines=[];let ln=lineStart;
-  for (let i=0;i<bytes.length;i+=bpp) {
-    const chunk=bytes.slice(i,i+bpp), addr=org+i;
-    const vals=chunk.map(b => fmt==='hex'?`&${h2(b)}`:String(b));
-    lines.push(`${ln}: POKE &${h4(addr)},${vals.join(',')}`);
-    ln+=lineStep;
+function renderOutput(memory) {
+  const bpr    = parseInt(document.getElementById('bpr-sel').value);
+  const outEl  = document.getElementById('output-area');
+  const empty  = document.getElementById('empty-state');
+
+  outEl.innerHTML = '';
+
+  if (!memory || memory.size === 0) {
+    outEl.appendChild(empty);
+    return;
   }
-  return lines.join('\n');
-}
-function convertH2B() {
-  const src=document.getElementById('hex-input').value.trim();
-  if (!src){setPill('h2b','NO INPUT');return;}
-  const bytes=parseHexBlob(src);
-  if (!bytes.length){setPill('h2b','NO VALID HEX BYTES');renderH2BEmpty();return;}
-  const org   = parseInt(document.getElementById('org-addr').value.trim()||'0',16)||0;
-  const ls    = parseInt(document.getElementById('line-start').value)||100;
-  const step  = parseInt(document.getElementById('line-step').value)||10;
-  const bpp   = parseInt(document.getElementById('bpp-sel').value)||16;
-  lastBasic   = genBasic(bytes,org,ls,step,bpp,valFmt);
-  renderH2B(bytes,org,bpp,ls,step);
-  document.getElementById('h2b-dl').disabled   = false;
-  document.getElementById('h2b-copy').disabled = false;
-  setPill('h2b',`<em>${bytes.length}</em> BYTES → <em>${Math.ceil(bytes.length/bpp)}</em> POKE LINES`);
-}
-function renderH2B(bytes, org, bpp, ls, step) {
-  const el=document.getElementById('h2b-inner');
-  el.innerHTML='';
-  el.appendChild(makeSumGrid([
-    ['BYTES',  bytes.length.toString(),'gr'],
-    ['START',  `$${h4(org)}`,''],
-    ['END',    `$${h4(org+bytes.length-1)}`,'or'],
-    ['LINES',  Math.ceil(bytes.length/bpp).toString(),''],
-    ['B/POKE', bpp.toString(),''],
-    ['FORMAT', valFmt.toUpperCase(),'pu'],
-  ]));
-  const container=document.createElement('div');
-  for (const line of lastBasic.split('\n')) {
-    const div=document.createElement('div');div.className='basic-line';
-    const m=line.match(/^(\d+):\s*(POKE)\s+(&[0-9A-Fa-f]+),(.+)$/i);
-    if (m) {
-      const vals=m[4].split(',');
-      div.innerHTML=
-        `<span class="bl-num">${esc(m[1])}</span>`+
-        `<span class="bl-sep">: </span>`+
-        `<span class="bl-poke">${esc(m[2])}</span> `+
-        `<span class="bl-addr">${esc(m[3])}</span>`+
-        `<span class="bl-sep">,</span>`+
-        vals.map(v=>`<span class="${v.startsWith('&')?'bl-hex':'bl-dec'}">${esc(v)}</span>`).join('<span class="bl-sep">,</span>');
-    } else { div.textContent=line; }
-    container.appendChild(div);
+  empty.style.display = 'none';
+
+  const addrs  = sortedAddrs(memory);
+  const blocks = getBlocks(addrs);
+  const gaps   = (addrs[addrs.length-1] - addrs[0] + 1) - memory.size;
+
+  // summary
+  const sg = document.createElement('div');
+  sg.className = 'summary-grid';
+  const cells = [
+    ['START ADDR', `$${hex4(addrs[0])}`, ''],
+    ['END ADDR',   `$${hex4(addrs[addrs.length-1])}`, 'orange'],
+    ['POKE BYTES', memory.size.toString(), 'green'],
+    ['BLOCKS',     blocks.length.toString(), ''],
+    ['SPAN',       (addrs[addrs.length-1] - addrs[0] + 1).toString() + ' B', 'orange'],
+    ['GAPS (0x00)',gaps.toString(), gaps > 0 ? 'purple' : ''],
+  ];
+  for (const [k, v, cls] of cells) {
+    const c = document.createElement('div');
+    c.className = 'summary-cell';
+    c.innerHTML = `<div class="summary-key">${k}</div><div class="summary-val ${cls}">${v}</div>`;
+    sg.appendChild(c);
   }
-  el.appendChild(container);
-}
-function renderH2BEmpty() {
-  document.getElementById('h2b-inner').innerHTML='<div class="empty-state"><pre> ┌──────────────┐\n │  HEX         │\n │  → BASIC     │\n └──────────────┘</pre>NO VALID HEX BYTES FOUND</div>';
+  outEl.appendChild(sg);
+
+  const frag = currentMode === 0
+    ? renderHexDump(memory, bpr)
+    : renderPureHex(memory, bpr);
+  outEl.appendChild(frag);
 }
 
-// ── B2H downloads ──────────────────────────────────────────────────────
-function b2hGetBuf() {
-  const a=sortedAddrs(lastMemory), s=a[0], e=a[a.length-1];
-  const buf=new Uint8Array(e-s+1);
-  for(const[addr,val]of lastMemory)buf[addr-s]=val;
-  return {buf,start:s};
-}
-function b2hDlHex() {
-  if(!lastMemory)return;
-  const a=sortedAddrs(lastMemory);
-  const lines=[];for(let i=0;i<a.length;i+=16)lines.push(a.slice(i,i+16).map(x=>h2(lastMemory.get(x))).join(' '));
-  triggerDownload(new Blob([lines.join('\n')+'\n'],{type:'text/plain'}),lastFname+'.hex');
-}
-function b2hDlBin() {
-  if(!lastMemory)return;
-  const {buf}=b2hGetBuf();
-  triggerDownload(new Blob([buf],{type:'application/octet-stream'}),lastFname+'.bin');
-}
-function sendToDisasm() {
-  if(!lastMemory)return;
-  const {buf,start}=b2hGetBuf();
-  sessionStorage.setItem('sc61860_disasm_hex',Array.from(buf).map(b=>h2(b)).join(' '));
-  sessionStorage.setItem('sc61860_disasm_org',h4(start));
-  window.location.href='sc61860-disassembler.html';
-}
-
-// ── H2B downloads ──────────────────────────────────────────────────────
-function h2bDl() {
-  if(!lastBasic)return;
-  triggerDownload(new Blob([lastBasic],{type:'text/plain'}),lastFname+'_poke.bas');
-}
-function h2bCopy() {
-  if(!lastBasic)return;
-  navigator.clipboard.writeText(lastBasic).then(()=>{
-    const btn=document.getElementById('h2b-copy'),orig=btn.textContent;
-    btn.textContent='COPIED!';setTimeout(()=>btn.textContent=orig,1400);
-  });
-}
-
-// ── Stat pills ─────────────────────────────────────────────────────────
-function setPill(which, html) { document.getElementById('pill-'+which).innerHTML=html; }
-
-// ── File loading ───────────────────────────────────────────────────────
-function triggerLoad(t) { document.getElementById(t==='bas'?'bas-file-in':'hex-file-in').click(); }
-function onBasFile(e) {
-  const f=e.target.files[0];if(!f)return;lastFname=f.name.replace(/\.[^.]+$/,'');
-  const r=new FileReader();r.onload=ev=>{document.getElementById('bas-input').value=ev.target.result;runConvert();};
-  r.readAsText(f,'latin1');e.target.value='';
-}
-function onHexFile(e) {
-  const f=e.target.files[0];if(!f)return;lastFname=f.name.replace(/\.[^.]+$/,'');
-  loadHexBinFile(f);e.target.value='';
-}
-function loadHexBinFile(file) {
-  const name=file.name.toLowerCase(), textExts=['.hex','.txt','.asm','.s'];
-  if (textExts.some(x=>name.endsWith(x))) {
-    const r=new FileReader();r.onload=ev=>{document.getElementById('hex-input').value=ev.target.result;runConvert();};r.readAsText(file,'latin1');
-  } else {
-    const r=new FileReader();
-    r.onload=ev=>{
-      const bytes=new Uint8Array(ev.target.result), sample=bytes.slice(0,512);
-      let p=0; for(const b of sample)if((b>=32&&b<=126)||b===10||b===13||b===9)p++;
-      if(sample.length&&p/sample.length>0.80){
-        const r2=new FileReader();r2.onload=ev2=>{document.getElementById('hex-input').value=ev2.target.result;runConvert();};r2.readAsText(file,'latin1');
-      } else {
-        const lines=[];for(let i=0;i<bytes.length;i+=16)lines.push(Array.from(bytes.slice(i,i+16)).map(b=>h2(b)).join(' '));
-        document.getElementById('hex-input').value=lines.join('\n');
-        runConvert();
-      }
-    };r.readAsArrayBuffer(file);
-  }
-}
-
-// ── Drag-and-drop on left pane ─────────────────────────────────────────
-const pL=document.getElementById('pane-left');
-pL.addEventListener('dragover',e=>{e.preventDefault();pL.classList.add('drag-over');});
-pL.addEventListener('dragleave',()=>pL.classList.remove('drag-over'));
-pL.addEventListener('drop',e=>{
-  e.preventDefault();pL.classList.remove('drag-over');
-  const f=e.dataTransfer.files[0];if(!f)return;
-  lastFname=f.name.replace(/\.[^.]+$/,'');
-  if(dir==='b2h'){const r=new FileReader();r.onload=ev=>{document.getElementById('bas-input').value=ev.target.result;runConvert();};r.readAsText(f,'latin1');}
-  else loadHexBinFile(f);
-});
-
-// ── Clear ──────────────────────────────────────────────────────────────
-function clearAll() {
-  document.getElementById('bas-input').value='';
-  document.getElementById('hex-input').value='';
-  lastMemory=null;lastBasic='';
-  document.getElementById('b2h-inner').innerHTML='<div class="empty-state"><pre> ┌──────────────┐\n │  BASIC       │\n │  → HEX       │\n └──────────────┘</pre>PASTE BASIC AND PRESS CONVERT</div>';
-  document.getElementById('h2b-inner').innerHTML='<div class="empty-state"><pre> ┌──────────────┐\n │  HEX         │\n │  → BASIC     │\n └──────────────┘</pre>PASTE HEX OR DROP A BINARY FILE</div>';
-  ['b2h-dl-hex','b2h-dl-bin','b2h-disasm','h2b-dl','h2b-copy'].forEach(id=>document.getElementById(id).disabled=true);
-  setPill('b2h','NO INPUT');setPill('h2b','NO INPUT');
-}
-
-// ── Splitter ───────────────────────────────────────────────────────────
-(function(){
-  const sp=document.getElementById('splitter'),ws=document.getElementById('workspace'),pl=document.getElementById('pane-left');
-  let dr=false,sx=0,sw=0;
-  sp.addEventListener('mousedown',e=>{dr=true;sx=e.clientX;sw=pl.offsetWidth;sp.classList.add('dragging');document.body.style.cursor='col-resize';document.body.style.userSelect='none';});
-  document.addEventListener('mousemove',e=>{if(!dr)return;pl.style.width=Math.min(Math.max(sw+(e.clientX-sx),200),ws.offsetWidth-200)+'px';});
-  document.addEventListener('mouseup',()=>{if(!dr)return;dr=false;sp.classList.remove('dragging');document.body.style.cursor='';document.body.style.userSelect='';});
-})();
-
-// ── Debounced auto-convert ─────────────────────────────────────────────
-document.getElementById('bas-input').addEventListener('input',()=>{clearTimeout(debTimer);debTimer=setTimeout(()=>{if(dir==='b2h')runConvert();},700);});
-document.getElementById('hex-input').addEventListener('input',()=>{clearTimeout(debTimer);debTimer=setTimeout(()=>{if(dir==='h2b')runConvert();},700);});
-['org-addr','line-start','line-step','bpp-sel'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{if(dir==='h2b')runConvert();}));
-
-// ── Init ───────────────────────────────────────────────────────────────
-window.addEventListener('load',()=>{
-  slideToggle('v-slider','v-dump');
-  slideToggle('vf-slider','vf-hex');
-
-  // Data from Assembler → POKE direction
-  const asmHex=sessionStorage.getItem('sc61860_poke_hex');
-  const asmOrg=sessionStorage.getItem('sc61860_poke_org');
-  if (asmHex) {
-    sessionStorage.removeItem('sc61860_poke_hex');
-    sessionStorage.removeItem('sc61860_poke_org');
-    setDir('h2b');
-    document.getElementById('hex-input').value=asmHex;
-    if (asmOrg) document.getElementById('org-addr').value=asmOrg;
-    runConvert();
+// ── Convert ────────────────────────────────────────────────────────────
+function convert() {
+  const src = document.getElementById('bas-input').value;
+  if (!src.trim()) {
+    setPill('NO INPUT');
     return;
   }
 
-  // Round-trip BASIC payload from disassembler
-  const basPay=sessionStorage.getItem('sc61860_poke_bas');
-  if (basPay) {
+  const { memory, errors } = extractPokes(src);
+  lastMemory = memory;
+
+  // errors
+  const outEl = document.getElementById('output-area');
+  if (errors.length) {
+    const errDiv = document.createElement('div');
+    for (const e of errors) {
+      const p = document.createElement('div');
+      p.className = 'out-error';
+      p.textContent = '⚠ ' + e;
+      errDiv.appendChild(p);
+    }
+    outEl.prepend(errDiv);
+  }
+
+  renderOutput(memory);
+
+  const enabled = memory.size > 0;
+  document.getElementById('dl-hex-btn').disabled  = !enabled;
+  document.getElementById('dl-bin-btn').disabled  = !enabled;
+  document.getElementById('dl-disasm-btn').disabled = !enabled;
+
+  if (memory.size === 0) {
+    setPill('NO POKE STATEMENTS FOUND');
+  } else {
+    const addrs = sortedAddrs(memory);
+    setPill(`<em>${memory.size}</em> BYTES  $${hex4(addrs[0])}–$${hex4(addrs[addrs.length-1])}`);
+  }
+}
+
+function setPill(html) {
+  document.getElementById('stat-pill').innerHTML = html;
+}
+
+// ── Build binary (flat, gap-filled) ───────────────────────────────────
+function buildBinary(memory) {
+  const addrs = sortedAddrs(memory);
+  const start = addrs[0], end = addrs[addrs.length - 1];
+  const buf   = new Uint8Array(end - start + 1);
+  for (const [addr, val] of memory) buf[addr - start] = val;
+  return buf;
+}
+
+// ── Build hex text ─────────────────────────────────────────────────────
+function buildHexText(memory) {
+  const bpr    = parseInt(document.getElementById('bpr-sel').value);
+  const addrs  = sortedAddrs(memory);
+  const blocks = getBlocks(addrs);
+  const lines  = [];
+
+  for (const block of blocks) {
+    const s = block[0], e = block[block.length - 1];
+    lines.push(`; Block $${hex4(s)}–$${hex4(e)}  (${block.length} bytes)`);
+    for (let rowStart = s; rowStart <= e; rowStart += bpr) {
+      const rowEnd = Math.min(rowStart + bpr - 1, e);
+      const hexPart   = [];
+      const asciiPart = [];
+      for (let a = rowStart; a <= rowEnd; a++) {
+        const v = memory.get(a);
+        hexPart.push(hex2(v));
+        asciiPart.push((v >= 0x20 && v <= 0x7E) ? String.fromCharCode(v) : '.');
+      }
+      const pad = '   '.repeat(bpr - hexPart.length);
+      lines.push(`  ${hex4(rowStart)}:  ${hexPart.join(' ')}${pad}  |${asciiPart.join('')}|`);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
+// ── Downloads ──────────────────────────────────────────────────────────
+function downloadHex() {
+  if (!lastMemory) return;
+  const text = buildHexText(lastMemory);
+  const blob = new Blob([text], { type: 'text/plain' });
+  triggerDownload(blob, lastFilename + '.hex');
+}
+
+function downloadBin() {
+  if (!lastMemory) return;
+  const buf  = buildBinary(lastMemory);
+  const blob = new Blob([buf], { type: 'application/octet-stream' });
+  triggerDownload(blob, lastFilename + '.bin');
+}
+
+function triggerDownload(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ── Send to disassembler ───────────────────────────────────────────────
+function sendToDisasm() {
+  if (!lastMemory) return;
+  const addrs  = sortedAddrs(lastMemory);
+  const start  = addrs[0];
+  const buf    = buildBinary(lastMemory);
+  const hexStr = Array.from(buf).map(b => hex2(b)).join(' ');
+  // store in sessionStorage for disassembler to pick up
+  sessionStorage.setItem('sc61860_disasm_hex',  hexStr);
+  sessionStorage.setItem('sc61860_disasm_org',  hex4(start));
+  window.open('sc61860-disassembler.html', '_blank');
+}
+
+// ── File loading ───────────────────────────────────────────────────────
+function loadFile() { document.getElementById('file-input').click(); }
+
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  lastFilename = file.name.replace(/\.[^.]+$/, '');
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('bas-input').value = ev.target.result;
+    convert();
+  };
+  reader.readAsText(file, 'latin1');
+  e.target.value = '';
+}
+
+// drag-and-drop on left pane
+const paneLeft = document.getElementById('pane-left');
+paneLeft.addEventListener('dragover', e => { e.preventDefault(); paneLeft.classList.add('drag-over'); });
+paneLeft.addEventListener('dragleave', () => paneLeft.classList.remove('drag-over'));
+paneLeft.addEventListener('drop', e => {
+  e.preventDefault();
+  paneLeft.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  lastFilename = file.name.replace(/\.[^.]+$/, '');
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('bas-input').value = ev.target.result;
+    convert();
+  };
+  reader.readAsText(file, 'latin1');
+});
+
+function clearInput() {
+  document.getElementById('bas-input').value = '';
+  lastMemory = null;
+  document.getElementById('output-area').innerHTML = '';
+  document.getElementById('output-area').appendChild(document.getElementById('empty-state'));
+  document.getElementById('empty-state').style.display = '';
+  document.getElementById('dl-hex-btn').disabled  = true;
+  document.getElementById('dl-bin-btn').disabled  = true;
+  document.getElementById('dl-disasm-btn').disabled = true;
+  setPill('NO INPUT');
+}
+
+// ── Splitter ───────────────────────────────────────────────────────────
+function initSplitter() {
+  const splitter  = document.getElementById('splitter');
+  const workspace = document.getElementById('workspace');
+  const paneL     = document.getElementById('pane-left');
+  let dragging = false, startX = 0, startW = 0;
+
+  splitter.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX; startW = paneL.offsetWidth;
+    splitter.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const totalW = workspace.offsetWidth;
+    const newW   = Math.min(Math.max(startW + (e.clientX - startX), 200), totalW - 200);
+    paneL.style.width = newW + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    splitter.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+}
+
+// ── Auto-convert on paste / input (debounced) ──────────────────────────
+let debTimer = null;
+document.getElementById('bas-input').addEventListener('input', () => {
+  clearTimeout(debTimer);
+  debTimer = setTimeout(convert, 600);
+});
+
+// ── Check sessionStorage for data passed from disassembler (round-trip) ─
+window.addEventListener('load', () => {
+  const payload = sessionStorage.getItem('sc61860_poke_bas');
+  if (payload) {
+    document.getElementById('bas-input').value = payload;
     sessionStorage.removeItem('sc61860_poke_bas');
-    document.getElementById('bas-input').value=basPay;
-    runConvert();
+    convert();
   }
 });
 </script>
