@@ -500,11 +500,24 @@ const ENTRIES = [
   // ── PC-1403 INTERNAL ROM UTILITY STUBS ────────────────────────────────────
   { section: 'PC-1403 / PC-1460 — INTERNAL ROM UTILITY STUBS' },
   { addr:0x159E, name:'EXG_iRAM_04_0C', cat:'ROM', devices:['1403'],
-    desc:'Exchanges the 16-bit X register (&04/&05 = XL/XH) with the two scratchpad bytes at &0C/&0D. ' +
+    desc:'Exchange internal RAM byte at address $04 (REG XL) with byte at $0C (REG YL). ' +
          'Opcode sequence: LP $04 · LIQ $0C · EXB · RTN. ' +
-         'EXB swaps J+1 bytes between (P) and (Q); called with J=1 to exchange both bytes. ' +
-         'Acts as a save/restore of X: simultaneously loads a previously stored pointer from &0C/&0D into X while saving the old X back into &0C/&0D. ' +
-         'Classic "exchange with memory" pattern used when the CPU needs to juggle 16-bit pointer values across calls.',
+         '4-byte utility stub; called by arithmetic and BCD routines that need to swap XL↔YL in the SC61860 internal register file.',
+    src:'PC-1403 ROM disassembly — verified' },
+  { addr:0x1494, name:'GET_KEY', cat:'IO', devices:['1403'],
+    desc:'Wait for a keystroke and return with the key code in A. Blocking — does not return until a key is pressed. ' +
+         'Turns LCD on, then loops polling both the IA-port keyboard scanner (0E68) and the special-key scanner (0F2A). ' +
+         'On each half-second tick the display state may be refreshed. Returns key code in A.',
+    src:'PC-1403 ROM disassembly — verified' },
+  { addr:0x03CE, name:'A_TO_Y', cat:'ROM', devices:['1403'],
+    desc:'Copy the 2-byte value at internal RAM address $02 (register pair AB) into the Y register (internal RAM $06–$07), then decrement Y (DY). ' +
+         'Opcode sequence: LP $06 · LIQ $02 · MVB · DY · RTN. ' +
+         '5-byte utility stub equivalent to "Y ← AB". Called by routines that need to transfer the AB pair into the Y pointer.',
+    src:'PC-1403 ROM disassembly — verified' },
+  { addr:0x03C4, name:'A_TO_X', cat:'ROM', devices:['1403'],
+    desc:'Copy the 2-byte value at internal RAM address $02 (register pair AB) into the X register (internal RAM $04–$05), then decrement X (DX). ' +
+         'Opcode sequence: LP $04 · LIQ $02 · MVB · DX · RTN. ' +
+         '5-byte utility stub equivalent to "X ← AB". Called by routines that need to transfer the AB pair into the X pointer.',
     src:'PC-1403 ROM disassembly — verified' },
 
   // ── PC-1350 SYSTEM RAM ────────────────────────────────────────────────────
@@ -667,12 +680,6 @@ const ENTRIES = [
   { addr:0x67B0, addrEnd:0x67FF, name:'Input Buffer', cat:'SYS', devices:['1262'],
     desc:'Keyboard input line buffer (Eingabebuffer).',
     src:'Sharp PC-1261 manual §VII.4' },
-
-  { section: 'PC-1261 / PC-1262 — I/O REGISTERS ($3000–$3FFF)' },
-  { addr:0x303D, name:'KBD_MODE', cat:'IO', devices:['1262'],
-    desc:'Keyboard mode select register. Write 9 ($09) to activate Japanese (Kana) keyboard layout; write 1 ($01) to revert to international (Roman) layout. ' +
-         'Verified via BASIC: POKE 12349,9 (Japanese) · POKE 12349,1 (international).',
-    src:'PC-1261/1262 BASIC — POKE 12349 verified' },
 
   { section: 'PC-1261 / PC-1262 — CORE ROM ROUTINES ($0000–$1FFF)' },
   { addr:0x0222, name:'BA_TO_Y', cat:'ROM', devices:['1262'],
