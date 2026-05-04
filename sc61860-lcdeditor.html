@@ -171,6 +171,7 @@ input[type="range"]::-webkit-slider-thumb {
 .cmt  { color:var(--muted); font-size:11px; }
 .str  { color:var(--green); }
 .val  { color:var(--accent); }
+.bpx  { color:var(--green); letter-spacing:0px; }
 /* FOOTER */
 footer {
   flex-shrink:0; border-top:1px solid var(--border); padding:5px 22px;
@@ -274,6 +275,7 @@ footer em { color:var(--text); font-style:normal; }
       <div class="out-tab"        id="tab-gstring" onclick="switchTab('gstring')">GPRINT STRING</div>
       <div class="out-tab"        id="tab-asm"     onclick="switchTab('asm')">ASM (.DB)</div>
       <div class="out-tab"        id="tab-raw"     onclick="switchTab('raw')">RAW BYTES</div>
+      <div class="out-tab"        id="tab-bitmap"  onclick="switchTab('bitmap')">BITMAP DUMP</div>
     </div>
     <div class="out-body" id="out-body"></div>
   </div>
@@ -662,10 +664,81 @@ function buildRaw(data) {
   return L;
 }
 
+// ── BITMAP DUMP ───────────────────────────────────────────────────────────────
+// Row-by-row, MSB = leftmost pixel. Each row = ceil(W/8) bytes.
+// This is a standard sprite/bitmap format, INDEPENDENT of GPRINT encoding.
+// Byte 0 of each row = pixels 0-7 (leftmost), MSB = pixel 0.
+function buildBitmap() {
+  const bytesPerRow = Math.ceil(W / 8);
+  const totalBytes  = H * bytesPerRow;
+  const L = [];
+
+  // Header comment block
+  L.push(`; ${'='.repeat(60)}`);
+  L.push(`; LCD bitmap dump  —  ${W}×${H} pixels`);
+  L.push(`; ${W} pixels wide = ${bytesPerRow} byte${bytesPerRow>1?'s':''} per row, ${H} rows = ${totalBytes} data bytes`);
+  L.push(`; MSB = leftmost pixel  (bit7=col0, bit6=col1, … bit0=col7)`);
+  L.push(`; ${'='.repeat(60)}`);
+  L.push('');
+
+  // Build each row: binary string + hex bytes + visual comment
+  const rowLines = [];
+  let maxBinLen = 0, maxHexLen = 0;
+
+  for (let y = 0; y < H; y++) {
+    const rowBytes = [];
+    const binGroups = [];
+    for (let bx = 0; bx < bytesPerRow; bx++) {
+      let byte = 0;
+      let binStr = '';
+      for (let bit = 0; bit < 8; bit++) {
+        const x = bx * 8 + bit;
+        const on = (x < W) ? pixels[y * W + x] : 0;
+        byte |= on << (7 - bit);  // MSB = leftmost
+        binStr += on ? '1' : '0';
+      }
+      rowBytes.push(byte);
+      binGroups.push(binStr);
+    }
+    const binStr  = binGroups.join(' ');
+    const hexStr  = rowBytes.map(b => '0x' + b.toString(16).padStart(2,'0')).join(', ');
+    maxBinLen = Math.max(maxBinLen, binStr.length);
+    maxHexLen = Math.max(maxHexLen, hexStr.length);
+    rowLines.push({ y, rowBytes, binStr, hexStr });
+  }
+
+  // Emit with aligned columns
+  // Format: ; row N: BBBBBBBB BBBBBBBB = 0xHH, 0xHH   [visual]
+  // Then the .db line
+  const namePad = String(H-1).length;
+  for (const { y, rowBytes, binStr, hexStr } of rowLines) {
+    // Build pixel-visual (use █ and · for on/off, compact)
+    let visual = '';
+    for (let x = 0; x < Math.min(W, 48); x++) visual += pixels[y*W+x] ? '\u2588' : '\u00b7';
+    if (W > 48) visual += '\u2026';
+
+    const binPad  = binStr.padEnd(maxBinLen);
+    const hexPad  = hexStr.padEnd(maxHexLen);
+    L.push(`; row${String(y).padStart(namePad+1)}: ${binPad} = ${hexPad}   ${visual}`);
+  }
+
+  L.push('');
+  L.push(`; ${'─'.repeat(60)}`);
+  L.push(`lcd_bitmap:        ; ${W}×${H}, ${totalBytes} bytes`);
+  L.push(`        .db     ${W}, ${H}        ; width, height`);
+
+  for (const { rowBytes } of rowLines) {
+    const dbLine = rowBytes.map(b => fmtAsm(b)).join(', ');
+    L.push(`        .db     ${dbLine}`);
+  }
+
+  return L;
+}
+
 // ── OUTPUT ───────────────────────────────────────────────────────────────────
 function switchTab(t) {
   outTab=t;
-  ['gprint','gstring','asm','raw'].forEach(x =>
+  ['gprint','gstring','asm','raw','bitmap'].forEach(x =>
     document.getElementById('tab-'+x).classList.toggle('active',x===t));
   updateOutput();
 }
@@ -676,16 +749,21 @@ function updateOutput() {
   if      (outTab==='gprint')  lines=buildGprint(data);
   else if (outTab==='gstring') lines=buildGstring(data);
   else if (outTab==='asm')     lines=buildAsm(data);
+  else if (outTab==='bitmap')  lines=buildBitmap();
   else                         lines=buildRaw(data);
 
   // highlight
   document.getElementById('out-body').innerHTML = lines.join('\n')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/\b(DATA|GPRINT|FOR|NEXT|POKE|READ)\b/g,'<span class="kw">$1</span>')
-    .replace(/\b(\.DB)\b/g,'<span class="kw">$1</span>')
-    .replace(/^(LCD_DATA:)/gm,'<span class="addr">$1</span>')
+    .replace(/\b(\.DB|\.db)\b/g,'<span class="kw">$1</span>')
+    .replace(/^(LCD_DATA:|lcd_bitmap:)/gm,'<span class="addr">$1</span>')
     .replace(/(&quot;[^&]*&quot;)/g,'<span class="str">$1</span>')
-    .replace(/(;[^\n]*)|(&#x27;[^\n]*)/g, m=>`<span class="cmt">${m}</span>`);
+    .replace(/(;[^\n]*)|(&#x27;[^\n]*)/g, m => {
+      // In bitmap rows, colour the visual block characters distinctly
+      const highlighted = m.replace(/([█·…]+)/g, '<span class="bpx">$1</span>');
+      return `<span class="cmt">${highlighted}</span>`;
+    });
 }
 
 function updateStats() {
