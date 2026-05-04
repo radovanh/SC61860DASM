@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC61860 LCD Pixel Editor — GPRINT / ASM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #07090d;
+  --panel:   #0c0f16;
+  --panel2:  #101520;
+  --border:  #182030;
+  --accent:  #00e5ff;
+  --accent2: #ff6b35;
+  --green:   #39ff14;
+  --purple:  #c792ea;
+  --yellow:  #e8d87a;
+  --dim:     #2a3a4a;
+  --text:    #c8d8e8;
+  --muted:   #4a6a7a;
+  --error:   #ff4444;
+  --glow:    0 0 12px rgba(0,229,255,0.35);
+  --glow2:   0 0 8px rgba(57,255,20,0.3);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  display: flex; flex-direction: column;
+}
+body::before {
+  content: ''; position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
+  pointer-events: none; z-index: 9999;
+}
+/* ── HEADER ── */
+header {
+  flex-shrink: 0; border-bottom: 1px solid var(--border);
+  padding: 12px 22px; display: flex; align-items: center; gap: 14px;
+  background: linear-gradient(180deg, rgba(57,255,20,0.03) 0%, transparent 100%);
+  position: relative; z-index: 10;
+}
+header::after {
+  content:''; position:absolute; bottom:0; left:0; right:0; height:1px;
+  background: linear-gradient(90deg, transparent, var(--green), transparent); opacity: 0.4;
+}
+.logo { font-family:'Orbitron',monospace; font-weight:900; font-size:17px;
+  color:var(--green); text-shadow:var(--glow2); letter-spacing:2px;
+  text-decoration:none; white-space:nowrap; }
+.logo span { color:var(--accent2); }
+.tagline { font-size:11px; color:var(--muted); letter-spacing:1px; }
+.nav-back { font-family:'Orbitron',monospace; font-size:10px; font-weight:700;
+  color:var(--muted); text-decoration:none; letter-spacing:1px;
+  border:1px solid var(--dim); padding:5px 12px; border-radius:2px; transition:all 0.2s; }
+.nav-back:hover { color:var(--accent); border-color:var(--accent); }
+.hdr-right { margin-left:auto; font-size:11px; color:var(--muted); text-align:right; line-height:1.6; }
+.hdr-right em { color:var(--green); font-style:normal; }
+/* ── CONTROLS ── */
+.controls {
+  flex-shrink:0; background:var(--panel); border-bottom:1px solid var(--border);
+  padding:7px 22px; display:flex; align-items:center; gap:9px;
+  flex-wrap:wrap; row-gap:5px;
+}
+.ctrl-label { font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; white-space:nowrap; }
+.ctrl-group { display:flex; align-items:center; gap:5px; }
+.btn {
+  font-family:'Orbitron',monospace; font-size:10px; font-weight:700;
+  letter-spacing:1px; padding:0 12px; border:1px solid currentColor;
+  background:transparent; cursor:pointer; border-radius:2px;
+  transition:all 0.16s; text-transform:uppercase; white-space:nowrap;
+  height:25px; display:flex; align-items:center; gap:4px;
+}
+.btn-green  { color:var(--green);   border-color:var(--green); }
+.btn-green:hover   { background:rgba(57,255,20,0.1);   box-shadow:var(--glow2); }
+.btn-accent { color:var(--accent);  border-color:var(--accent); }
+.btn-accent:hover  { background:rgba(0,229,255,0.08);  box-shadow:var(--glow); }
+.btn-orange { color:var(--accent2); border-color:var(--accent2); }
+.btn-orange:hover  { background:rgba(255,107,53,0.1); }
+.btn-muted  { color:var(--muted);   border-color:var(--dim); }
+.btn-muted:hover   { color:var(--text); border-color:var(--muted); }
+input[type="number"], select {
+  background:var(--bg); border:1px solid var(--border); color:var(--accent2);
+  font-family:'Share Tech Mono',monospace; font-size:12px;
+  padding:3px 6px; border-radius:2px; outline:none; height:25px;
+  transition:border-color 0.2s;
+}
+input[type="number"]:focus, select:focus { border-color:var(--accent2); }
+input[type="number"] { width:60px; }
+select { cursor:pointer; }
+select option { background:var(--panel); }
+.sep { width:1px; height:18px; background:var(--border); flex-shrink:0; }
+/* TOGGLE */
+.tog-wrap {
+  display:flex; height:25px; background:var(--bg); border:1px solid var(--border);
+  border-radius:2px; overflow:hidden; cursor:pointer; user-select:none; position:relative;
+}
+.tog-opt {
+  padding:0 10px; display:flex; align-items:center;
+  font-family:'Orbitron',monospace; font-size:10px; font-weight:700;
+  letter-spacing:1px; color:var(--muted); transition:color 0.14s;
+  position:relative; z-index:1;
+}
+.tog-slider {
+  position:absolute; top:2px; bottom:2px; border-radius:1px; z-index:0;
+  transition:left 0.13s cubic-bezier(.4,0,.2,1), width 0.13s cubic-bezier(.4,0,.2,1);
+}
+.tog-g .tog-slider { background:rgba(57,255,20,0.12);  border:1px solid rgba(57,255,20,0.55); }
+.tog-o .tog-slider { background:rgba(255,107,53,0.12); border:1px solid rgba(255,107,53,0.55); }
+.tog-g .tog-opt.active { color:var(--green); }
+.tog-o .tog-opt.active { color:var(--accent2); }
+/* ZOOM */
+input[type="range"] {
+  -webkit-appearance:none; height:4px; background:var(--border);
+  border-radius:2px; outline:none; cursor:pointer; width:76px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance:none; width:13px; height:13px; border-radius:50%;
+  background:var(--green); cursor:pointer; box-shadow:0 0 6px rgba(57,255,20,0.5);
+}
+.zoom-val { font-size:11px; color:var(--green); min-width:24px; text-align:right; }
+/* WORKSPACE */
+.workspace { flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+.canvas-area { flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+.pane-header {
+  flex-shrink:0; padding:6px 16px; background:var(--panel);
+  border-bottom:1px solid var(--border); font-size:10px; color:var(--muted);
+  letter-spacing:2px; text-transform:uppercase; display:flex; align-items:center; gap:8px;
+}
+.pane-header .dot {
+  width:6px; height:6px; border-radius:50%; background:var(--green);
+  box-shadow:var(--glow2); animation:pulse 2s infinite; flex-shrink:0;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.canvas-scroll {
+  flex:1; overflow:auto; background:var(--bg);
+}
+.canvas-scroll::-webkit-scrollbar { width:8px; height:8px; }
+.canvas-scroll::-webkit-scrollbar-track { background:var(--bg); }
+.canvas-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+.canvas-scroll::-webkit-scrollbar-corner { background:var(--bg); }
+#lcd-canvas { display:block; cursor:crosshair; image-rendering:pixelated; }
+/* OUTPUT */
+.output-panel {
+  flex-shrink:0; border-top:1px solid var(--border);
+  background:var(--panel2); max-height:35vh; min-height:80px;
+  display:flex; flex-direction:column;
+}
+.out-tabs {
+  flex-shrink:0; display:flex; border-bottom:1px solid var(--border); background:var(--panel);
+}
+.out-tab {
+  padding:6px 15px; font-family:'Orbitron',monospace; font-size:10px; font-weight:700;
+  letter-spacing:1px; color:var(--muted); cursor:pointer;
+  border-right:1px solid var(--border); transition:all 0.14s; white-space:nowrap;
+}
+.out-tab:hover { color:var(--text); }
+.out-tab.active { color:var(--green); background:rgba(57,255,20,0.05); }
+.out-body {
+  flex:1; overflow-y:auto; overflow-x:auto; padding:12px 16px;
+  font-size:12px; line-height:1.8; white-space:pre;
+  color:#c8d8e8;
+}
+.out-body::-webkit-scrollbar { width:5px; height:5px; }
+.out-body::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+.kw   { color:var(--yellow); }
+.addr { color:var(--accent2); }
+.cmt  { color:var(--muted); font-size:11px; }
+.str  { color:var(--green); }
+.val  { color:var(--accent); }
+/* FOOTER */
+footer {
+  flex-shrink:0; border-top:1px solid var(--border); padding:5px 22px;
+  display:flex; align-items:center; gap:16px; background:var(--panel);
+  font-size:11px; color:var(--muted); flex-wrap:wrap;
+}
+footer em { color:var(--text); font-style:normal; }
+#cursor-info { color:var(--green); min-width:200px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <a class="logo" href="index.html">SC<span>61860</span> LCD</a>
+    <div class="tagline">PIXEL EDITOR — GPRINT / ASM HEX GENERATOR</div>
+  </div>
+  <a class="nav-back" href="index.html">&#8592; INDEX</a>
+  <div class="hdr-right">SHARP PC-1360 / G815 / G850 / 1600<br><em>COLUMN-PACKED GPRINT FORMAT</em></div>
+</header>
+
+<div class="controls">
+  <div class="ctrl-group">
+    <span class="ctrl-label">DEVICE</span>
+    <select id="device-sel" onchange="applyPreset()">
+      <option value="custom">Custom</option>
+      <option value="1360">PC-1360  (150×32)</option>
+      <option value="1600">PC-1600  (156×32)</option>
+      <option value="g815">PC-G815  (144×32)</option>
+      <option value="g850" selected>PC-G850V (144×48)</option>
+    </select>
+  </div>
+  <div class="sep"></div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">W</span>
+    <input type="number" id="width-inp"  value="144" min="1"  max="384" oninput="markCustom();resizeGrid()">
+  </div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">H</span>
+    <input type="number" id="height-inp" value="48"  min="8"  max="128" step="8" oninput="markCustom();resizeGrid()">
+  </div>
+  <div class="sep"></div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">TOOL</span>
+    <div class="tog-wrap tog-g" id="tool-tog" onclick="cycleTool()">
+      <div class="tog-slider" id="tool-slider"></div>
+      <div class="tog-opt active" id="tool-draw">DRAW</div>
+      <div class="tog-opt"        id="tool-erase">ERASE</div>
+      <div class="tog-opt"        id="tool-fill">FILL</div>
+    </div>
+  </div>
+  <div class="sep"></div>
+  <button class="btn btn-muted" onclick="clearAll()">CLEAR</button>
+  <button class="btn btn-muted" onclick="invertAll()">INVERT</button>
+  <button class="btn btn-muted" onclick="shift(-1, 0)" title="Shift left">&#9664;</button>
+  <button class="btn btn-muted" onclick="shift( 1, 0)" title="Shift right">&#9654;</button>
+  <button class="btn btn-muted" onclick="shift( 0,-1)" title="Shift up">&#9650;</button>
+  <button class="btn btn-muted" onclick="shift( 0, 1)" title="Shift down">&#9660;</button>
+  <div class="sep"></div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">VALUES</span>
+    <div class="tog-wrap tog-o" id="val-tog" onclick="cycleVal()">
+      <div class="tog-slider" id="val-slider"></div>
+      <div class="tog-opt active" id="val-hex">HEX</div>
+      <div class="tog-opt"        id="val-dec">DEC</div>
+    </div>
+  </div>
+  <div class="sep"></div>
+  <div class="ctrl-group">
+    <span class="ctrl-label">ZOOM</span>
+    <input type="range" id="zoom-range" min="1" max="14" value="5" oninput="setZoom(+this.value)">
+    <span class="zoom-val" id="zoom-val">5&#215;</span>
+  </div>
+  <div class="sep"></div>
+  <button class="btn btn-green"  id="copy-btn" onclick="copyOut()">COPY</button>
+  <button class="btn btn-accent" onclick="saveFile()">&#8595; SAVE</button>
+  <button class="btn btn-muted"  onclick="document.getElementById(&#34;file-in&#34;).click()" title="Load .lcd file or raw hex bytes">&#8593; LOAD</button>
+  <input type="file" id="file-in" accept=".lcd,.txt,.bas,.asm" style="display:none" onchange="loadFile(this)">
+</div>
+
+<div class="workspace">
+  <div class="canvas-area">
+    <div class="pane-header">
+      <div class="dot"></div>
+      LCD PIXEL EDITOR
+      <span style="margin-left:8px;color:var(--dim);font-size:10px">
+        DRAW/DRAG &nbsp;&#183;&nbsp; RIGHT-CLICK=ERASE &nbsp;&#183;&nbsp; SHIFT+DRAG=LINE
+      </span>
+      <span style="margin-left:auto;font-size:10px;color:var(--accent2)">
+        BIT0=TOP(&#215;1) &#8230; BIT7=BOTTOM(&#215;80h) &nbsp;&#183;&nbsp; TOP-4-ON=0F &nbsp;&#183;&nbsp; BOT-4-ON=F0
+      </span>
+    </div>
+    <div class="canvas-scroll">
+      <canvas id="lcd-canvas"></canvas>
+    </div>
+  </div>
+
+  <div class="output-panel">
+    <div class="out-tabs">
+      <div class="out-tab active" id="tab-gprint"  onclick="switchTab('gprint')">GPRINT DATA</div>
+      <div class="out-tab"        id="tab-gstring" onclick="switchTab('gstring')">GPRINT STRING</div>
+      <div class="out-tab"        id="tab-asm"     onclick="switchTab('asm')">ASM (.DB)</div>
+      <div class="out-tab"        id="tab-raw"     onclick="switchTab('raw')">RAW BYTES</div>
+    </div>
+    <div class="out-body" id="out-body"></div>
+  </div>
+</div>
+
+<footer>
+  <span id="cursor-info">X:&#8212; Y:&#8212;</span>
+  <span>SIZE: <em id="stat-size">144&#215;48</em></span>
+  <span>BANDS: <em id="stat-bands">6</em> &#215; 8px</span>
+  <span>PIXELS ON: <em id="stat-px">0</em></span>
+  <span>BYTES: <em id="stat-bytes">0</em></span>
+  <span style="margin-left:auto;color:var(--border)">SC61860 LCD EDITOR</span>
+</footer>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════════════════
+// ENCODING — Sharp PC-G850 manual, GPRINT command
+//
+// LCD is divided into horizontal bands of 8 pixel rows.
+// Output order: band 0 (rows 0-7), then band 1 (rows 8-15), …
+// Within each band: column 0, column 1, … column W-1
+// Each column-byte:  bit 0 (=1)   → TOP    pixel of the band  (row b*8+0)
+//                    bit 1 (=2)   → row b*8+1
+//                    ...
+//                    bit 7 (=128) → BOTTOM pixel of the band  (row b*8+7)
+//
+// Verification:
+//   Top  4 pixels ON → bits 0-3 set → 1+2+4+8 = 15 = 0x0F  ✓
+//   Bot  4 pixels ON → bits 4-7 set → 16+32+64+128 = 240 = 0xF0 ✓
+//
+// GPRINT "string" mode (per manual):
+//   Each byte is written as TWO hex chars.
+//   First  char = low  nibble (bits 0-3, TOP 4 dots)
+//   Second char = high nibble (bits 4-7, BOTTOM 4 dots)
+// ═══════════════════════════════════════════════════════════════════════════
+
+let W = 144, H = 48;
+let pixels = null;        // Uint8Array [y*W + x]
+let zoom     = 5;
+let tool     = 'draw';    // draw | erase | fill
+let valMode  = 'hex';     // hex | dec
+let outTab   = 'gprint';
+
+// painting state
+let painting = false, paintVal = 1;
+let lineMode = false, lineStart = null, lastPt = null;
+
+const RULER_W = 28, RULER_H = 18;
+const cv = document.getElementById('lcd-canvas');
+const cx = cv.getContext('2d');
+
+// ── PRESETS ─────────────────────────────────────────────────────────────────
+const PRESETS = { '1360':[150,32], '1600':[156,32], 'g815':[144,32], 'g850':[144,48] };
+function applyPreset() {
+  const v = document.getElementById('device-sel').value;
+  if (!PRESETS[v]) return;
+  document.getElementById('width-inp').value  = PRESETS[v][0];
+  document.getElementById('height-inp').value = PRESETS[v][1];
+  resizeGrid(false);
+}
+function markCustom() { document.getElementById('device-sel').value = 'custom'; }
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+function init() {
+  pixels = new Uint8Array(W * H);
+  resizeCanvas(); render(); updateOutput(); updateStats(); initToggles();
+}
+window.addEventListener('load', init);
+
+function initToggles() {
+  ['draw','erase','fill'].forEach(t =>
+    document.getElementById('tool-'+t).classList.toggle('active', t === tool));
+  sl('tool-slider','tool-'+tool);
+  ['hex','dec'].forEach(m =>
+    document.getElementById('val-'+m).classList.toggle('active', m === valMode));
+  sl('val-slider','val-'+valMode);
+}
+function sl(sid, aid) {
+  const s = document.getElementById(sid), a = document.getElementById(aid);
+  if (s && a) { s.style.left = a.offsetLeft+'px'; s.style.width = a.offsetWidth+'px'; }
+}
+
+// ── GRID RESIZE ──────────────────────────────────────────────────────────────
+function resizeGrid(keep = true) {
+  let nw = Math.max(1, Math.min(384, parseInt(document.getElementById('width-inp').value) || W));
+  let nh = Math.max(8, Math.min(128, parseInt(document.getElementById('height-inp').value) || H));
+  nh = Math.ceil(nh / 8) * 8;
+  document.getElementById('height-inp').value = nh;
+
+  const op = pixels, ow = W, oh = H;
+  W = nw; H = nh;
+  pixels = new Uint8Array(W * H);
+  if (keep) {
+    const cw = Math.min(ow,W), ch = Math.min(oh,H);
+    for (let y=0;y<ch;y++) for (let x=0;x<cw;x++) pixels[y*W+x] = op[y*ow+x];
+  }
+  resizeCanvas(); render(); updateOutput(); updateStats();
+}
+
+// ── CANVAS ───────────────────────────────────────────────────────────────────
+function resizeCanvas() {
+  cv.width  = RULER_W + W * zoom;
+  cv.height = RULER_H + H * zoom;
+}
+
+function render(hx, hy) {
+  cx.clearRect(0, 0, cv.width, cv.height);
+  // background
+  cx.fillStyle = '#07090d'; cx.fillRect(0,0,cv.width,cv.height);
+  cx.fillStyle = '#0a0e14'; cx.fillRect(0,0,cv.width,RULER_H);
+  cx.fillRect(0,0,RULER_W,cv.height);
+
+  // pixels
+  for (let y=0; y<H; y++)
+    for (let x=0; x<W; x++) {
+      cx.fillStyle = pixels[y*W+x] ? '#39ff14' : '#0a1018';
+      cx.fillRect(RULER_W+x*zoom, RULER_H+y*zoom, zoom, zoom);
+    }
+
+  // pixel grid
+  if (zoom >= 4) {
+    cx.strokeStyle = 'rgba(255,255,255,0.04)'; cx.lineWidth = 0.5;
+    for (let x=0;x<=W;x++) {
+      cx.beginPath(); cx.moveTo(RULER_W+x*zoom+.5,RULER_H);
+      cx.lineTo(RULER_W+x*zoom+.5,RULER_H+H*zoom); cx.stroke();
+    }
+    for (let y=0;y<=H;y++) {
+      cx.beginPath(); cx.moveTo(RULER_W,RULER_H+y*zoom+.5);
+      cx.lineTo(RULER_W+W*zoom,RULER_H+y*zoom+.5); cx.stroke();
+    }
+  }
+
+  // band separators
+  if (zoom >= 2) {
+    // 8-col vertical (cyan) — show column groups
+    cx.strokeStyle = 'rgba(0,229,255,0.10)'; cx.lineWidth = zoom>=5 ? 1 : 0.5;
+    for (let x=0;x<=W;x+=8) {
+      cx.beginPath(); cx.moveTo(RULER_W+x*zoom+.5,RULER_H);
+      cx.lineTo(RULER_W+x*zoom+.5,RULER_H+H*zoom); cx.stroke();
+    }
+    // 8-row horizontal (orange) — the bands
+    cx.strokeStyle = 'rgba(255,107,53,0.25)'; cx.lineWidth = zoom>=4 ? 1.5 : 0.5;
+    for (let y=0;y<=H;y+=8) {
+      cx.beginPath(); cx.moveTo(RULER_W,RULER_H+y*zoom+.5);
+      cx.lineTo(RULER_W+W*zoom,RULER_H+y*zoom+.5); cx.stroke();
+    }
+    // band index labels
+    if (zoom >= 3) {
+      cx.fillStyle = 'rgba(255,107,53,0.4)';
+      cx.font = `${Math.max(8, Math.min(10, zoom+1))}px 'Share Tech Mono'`;
+      cx.textAlign = 'left';
+      for (let b=0; b<H/8; b++)
+        cx.fillText('B'+b, RULER_W+2, RULER_H+b*8*zoom + Math.min(9, zoom*3));
+    }
+  }
+
+  // hover highlight
+  if (hx !== undefined && hx >= 0 && hx < W && hy >= 0 && hy < H) {
+    cx.fillStyle = 'rgba(57,255,20,0.09)';
+    cx.fillRect(RULER_W, RULER_H+hy*zoom, W*zoom, zoom);
+    cx.fillRect(RULER_W+hx*zoom, RULER_H, zoom, H*zoom);
+    cx.strokeStyle = 'rgba(57,255,20,0.65)'; cx.lineWidth = 1;
+    cx.strokeRect(RULER_W+hx*zoom+.5, RULER_H+hy*zoom+.5, zoom, zoom);
+  }
+
+  drawRulers(hx, hy);
+}
+
+function drawRulers(hx, hy) {
+  cx.font = `${Math.max(8,Math.min(10,zoom+2))}px 'Share Tech Mono'`;
+  const xStep = zoom>=8 ? 8 : zoom>=4 ? 16 : zoom>=2 ? 32 : 64;
+  cx.textAlign = 'center';
+  for (let x=0; x<W; x+=xStep) {
+    const px = RULER_W + x*zoom + xStep*zoom/2;
+    cx.fillStyle = (hx !== undefined && hx >= x && hx < x+xStep) ? '#39ff14' : '#4a6a7a';
+    cx.fillText(x, px, RULER_H-3);
+  }
+  const yStep = zoom>=8 ? 4 : zoom>=4 ? 8 : 16;
+  cx.textAlign = 'right';
+  for (let y=0; y<H; y+=yStep) {
+    cx.fillStyle = (hy !== undefined && hy >= y && hy < y+yStep) ? '#39ff14' : '#4a6a7a';
+    cx.fillText(y, RULER_W-3, RULER_H+y*zoom+zoom/2+3);
+  }
+}
+
+// ── INPUT ─────────────────────────────────────────────────────────────────────
+function ptToGrid(e) {
+  const r = cv.getBoundingClientRect();
+  const sx = cv.width / r.width, sy = cv.height / r.height;
+  const src = e.touches ? e.touches[0] : e;
+  return [
+    Math.floor(((src.clientX - r.left) * sx - RULER_W) / zoom),
+    Math.floor(((src.clientY - r.top)  * sy - RULER_H) / zoom)
+  ];
+}
+function setpx(x, y, v) { if (x>=0&&x<W&&y>=0&&y<H) pixels[y*W+x]=v; }
+
+function floodFill(x, y, v) {
+  if (x<0||x>=W||y<0||y>=H) return;
+  const orig = pixels[y*W+x]; if (orig===v) return;
+  const q = [[x,y]];
+  while (q.length) {
+    const [cx2,cy2] = q.pop();
+    if (cx2<0||cx2>=W||cy2<0||cy2>=H||pixels[cy2*W+cx2]!==orig) continue;
+    pixels[cy2*W+cx2]=v;
+    q.push([cx2+1,cy2],[cx2-1,cy2],[cx2,cy2+1],[cx2,cy2-1]);
+  }
+}
+
+function bline(x0,y0,x1,y1,v,buf) {
+  const b = buf||pixels;
+  let dx=Math.abs(x1-x0),sx=x0<x1?1:-1,dy=-Math.abs(y1-y0),sy=y0<y1?1:-1,err=dx+dy;
+  for(;;){
+    if(x0>=0&&x0<W&&y0>=0&&y0<H) b[y0*W+x0]=v;
+    if(x0===x1&&y0===y1) break;
+    const e2=2*err;
+    if(e2>=dy){err+=dy;x0+=sx;} if(e2<=dx){err+=dx;y0+=sy;}
+  }
+}
+
+cv.addEventListener('mousedown', e => {
+  e.preventDefault();
+  const [x,y] = ptToGrid(e);
+  if (tool==='fill') { floodFill(x,y,e.button===2?0:1); render(x,y);updateOutput();updateStats();return; }
+  painting=true; lineMode=e.shiftKey; lineStart=[x,y]; lastPt=[x,y];
+  paintVal = e.button===2 ? 0 : tool==='erase' ? 0 : (pixels[y*W+x]?0:1);
+  setpx(x,y,paintVal); render(x,y); updateOutput(); updateStats();
+});
+cv.addEventListener('contextmenu', e=>e.preventDefault());
+cv.addEventListener('mousemove', e => {
+  const [x,y] = ptToGrid(e);
+  const band = y>=0&&y<H ? Math.floor(y/8) : '—';
+  const bit  = y>=0&&y<H ? y%8 : '—';
+  document.getElementById('cursor-info').textContent =
+    `X:${x>=0&&x<W?x:'—'} Y:${y>=0&&y<H?y:'—'}  Band:${band}  Bit:${bit}(wt:${y>=0&&y<H?1<<(y%8):'—'})`;
+  if (!painting) { render(x,y); return; }
+  if (lineMode && lineStart) {
+    const tmp = new Uint8Array(pixels);
+    bline(lineStart[0],lineStart[1],x,y,paintVal,tmp);
+    const sv=pixels; pixels=tmp; render(x,y); pixels=sv;
+  } else {
+    if (lastPt) bline(lastPt[0],lastPt[1],x,y,paintVal); else setpx(x,y,paintVal);
+    lastPt=[x,y]; render(x,y); updateOutput(); updateStats();
+  }
+});
+cv.addEventListener('mouseup', e => {
+  if (!painting) return;
+  const [x,y]=ptToGrid(e);
+  if (lineMode&&lineStart) bline(lineStart[0],lineStart[1],x,y,paintVal);
+  painting=false;lineStart=null;lineMode=false;lastPt=null;
+  render(x,y); updateOutput(); updateStats();
+});
+cv.addEventListener('mouseleave', () => {
+  document.getElementById('cursor-info').textContent='X:— Y:—';
+  if(painting){painting=false;updateOutput();updateStats();} render();
+});
+cv.addEventListener('touchstart', e => {
+  e.preventDefault(); const [x,y]=ptToGrid(e);
+  painting=true; paintVal=pixels[y*W+x]?0:1; lastPt=[x,y];
+  setpx(x,y,paintVal); render(x,y); updateOutput(); updateStats();
+},{passive:false});
+cv.addEventListener('touchmove', e => {
+  e.preventDefault(); const [x,y]=ptToGrid(e);
+  if(lastPt) bline(lastPt[0],lastPt[1],x,y,paintVal); lastPt=[x,y];
+  render(x,y); updateOutput(); updateStats();
+},{passive:false});
+cv.addEventListener('touchend',()=>{painting=false;lastPt=null;updateOutput();updateStats();});
+
+// ── TOOLS ────────────────────────────────────────────────────────────────────
+const TOOLS=['draw','erase','fill']; let ti=0;
+function cycleTool(){ ti=(ti+1)%3; tool=TOOLS[ti]; initToggles(); }
+let vi=0;
+function cycleVal(){ vi^=1; valMode=vi?'dec':'hex'; initToggles(); updateOutput(); }
+function setZoom(z){ zoom=z; document.getElementById('zoom-val').textContent=z+'×'; resizeCanvas(); render(); }
+function clearAll(){  pixels.fill(0); render(); updateOutput(); updateStats(); }
+function invertAll(){ for(let i=0;i<pixels.length;i++) pixels[i]^=1; render(); updateOutput(); updateStats(); }
+function shift(dx,dy){
+  const t=new Uint8Array(W*H);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++) t[((y+dy+H)%H)*W+((x+dx+W)%W)]=pixels[y*W+x];
+  pixels=t; render(); updateOutput(); updateStats();
+}
+
+// ── ENCODING ─────────────────────────────────────────────────────────────────
+// Row-band ordered, then column ordered within each band.
+// Bit0 = top pixel (weight 1), Bit7 = bottom pixel (weight 128).
+function encode() {
+  const bands = H / 8;
+  const data  = new Uint8Array(W * bands);
+  for (let b=0; b<bands; b++)
+    for (let x=0; x<W; x++) {
+      let byte=0;
+      for (let bit=0; bit<8; bit++) {
+        const y = b*8+bit;
+        if (y<H && pixels[y*W+x]) byte |= (1<<bit);
+      }
+      data[b*W+x] = byte;
+    }
+  return data;
+}
+
+// ── FORMAT HELPERS ───────────────────────────────────────────────────────────
+const H16='0123456789ABCDEF';
+function fmtBasic(b) { return valMode==='hex' ? '&H'+b.toString(16).toUpperCase().padStart(2,'0') : String(b); }
+function fmtAsm(b)   { return valMode==='hex' ? '$' +b.toString(16).toUpperCase().padStart(2,'0') : String(b); }
+function fmtRaw(b)   { return valMode==='hex' ? b.toString(16).toUpperCase().padStart(2,'0') : b.toString().padStart(3,' '); }
+// GPRINT string: lo-nibble (top 4 dots) first, then hi-nibble (bottom 4 dots)
+function bToGS(b) { return H16[b&0x0F] + H16[(b>>4)&0x0F]; }
+
+// ── OUTPUT BUILDERS ───────────────────────────────────────────────────────────
+function buildGprint(data) {
+  const bands=H/8, bpc=8;
+  const L=[];
+  L.push(`' Sharp GPRINT numeric data — W=${W} H=${H} Bands=${bands}`);
+  L.push(`' Order: band-by-band (rows 0-7, 8-15, …), within each band: column 0…${W-1}`);
+  L.push(`' Bit0=top pixel(wt 1) … Bit7=bottom pixel(wt 128=&H80)`);
+  L.push(`' Top 4 pixels ON = &H0F | Bottom 4 pixels ON = &HF0`);
+  L.push(`' Usage: FOR I=0 TO ${data.length-1}: READ D: POKE BASE+I,D: NEXT I`);
+  L.push('');
+  for (let b=0;b<bands;b++) {
+    L.push(`' Band ${b} — rows ${b*8}–${b*8+7}`);
+    for (let ci=0;ci<W;ci+=bpc) {
+      const chunk=[];
+      for (let x=ci; x<Math.min(ci+bpc,W); x++) chunk.push(fmtBasic(data[b*W+x]));
+      L.push(`DATA ${chunk.join(',')}`);
+    }
+  }
+  return L;
+}
+
+function buildGstring(data) {
+  const bands=H/8;
+  const L=[];
+  L.push(`' Sharp GPRINT string mode — W=${W} H=${H}`);
+  L.push(`' Each byte → 2 hex chars: lo-nibble (top 4 dots) first, hi-nibble (bottom 4) second`);
+  L.push(`' Top 4 ON → "F0" (lo=F=&H0F, hi=0) | Bottom 4 ON → "0F" (lo=0, hi=F=&HF0)`);
+  L.push('');
+  for (let b=0;b<bands;b++) {
+    let s='';
+    for (let x=0;x<W;x++) s+=bToGS(data[b*W+x]);
+    L.push(`' Band ${b} (rows ${b*8}–${b*8+7}) — ${W*2} chars:`);
+    L.push(`GPRINT "${s}"`);
+    // column-group annotation
+    if (W<=96) {
+      let ann="'  cols: ";
+      for (let x=0;x<W;x++) { ann+=(x%8===0&&x>0)?'|':' '; ann+=x.toString().padStart(2,' '); if(x%8===7)ann+=' '; }
+      // just show ruler
+    }
+    L.push('');
+  }
+  return L;
+}
+
+function buildAsm(data) {
+  const bands=H/8, bpc=8;
+  const L=[];
+  L.push(`; SC61860 LCD data  W=${W} H=${H}  ${data.length} bytes`);
+  L.push(`; Band-by-band, column-by-column within each band`);
+  L.push(`; Bit0=top(×1) … Bit7=bottom(×80h)  |  0F=top4 ON  F0=bot4 ON`);
+  L.push('');
+  L.push('LCD_DATA:');
+  for (let b=0;b<bands;b++) {
+    L.push(`; Band ${b} — rows ${b*8}–${b*8+7}`);
+    for (let ci=0;ci<W;ci+=bpc) {
+      const chunk=[];
+      for (let x=ci;x<Math.min(ci+bpc,W);x++) chunk.push(fmtAsm(data[b*W+x]));
+      L.push(`        .DB     ${chunk.join(', ')}  ; col ${ci}–${Math.min(ci+bpc-1,W-1)}`);
+    }
+  }
+  return L;
+}
+
+function buildRaw(data) {
+  const bands=H/8, bpc=16;
+  const L=[];
+  L.push(`; Raw ${valMode}  W=${W} H=${H}  ${data.length} bytes`);
+  L.push('');
+  for (let b=0;b<bands;b++) {
+    L.push(`; Band ${b}:`);
+    for (let ci=0;ci<W;ci+=bpc) {
+      const chunk=[];
+      for (let x=ci;x<Math.min(ci+bpc,W);x++) chunk.push(fmtRaw(data[b*W+x]));
+      L.push(chunk.join(' '));
+    }
+  }
+  return L;
+}
+
+// ── OUTPUT ───────────────────────────────────────────────────────────────────
+function switchTab(t) {
+  outTab=t;
+  ['gprint','gstring','asm','raw'].forEach(x =>
+    document.getElementById('tab-'+x).classList.toggle('active',x===t));
+  updateOutput();
+}
+
+function updateOutput() {
+  const data=encode();
+  let lines=[];
+  if      (outTab==='gprint')  lines=buildGprint(data);
+  else if (outTab==='gstring') lines=buildGstring(data);
+  else if (outTab==='asm')     lines=buildAsm(data);
+  else                         lines=buildRaw(data);
+
+  // highlight
+  document.getElementById('out-body').innerHTML = lines.join('\n')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\b(DATA|GPRINT|FOR|NEXT|POKE|READ)\b/g,'<span class="kw">$1</span>')
+    .replace(/\b(\.DB)\b/g,'<span class="kw">$1</span>')
+    .replace(/^(LCD_DATA:)/gm,'<span class="addr">$1</span>')
+    .replace(/(&quot;[^&]*&quot;)/g,'<span class="str">$1</span>')
+    .replace(/(;[^\n]*)|(&#x27;[^\n]*)/g, m=>`<span class="cmt">${m}</span>`);
+}
+
+function updateStats() {
+  const bands=H/8;
+  document.getElementById('stat-size').textContent  = `${W}×${H}`;
+  document.getElementById('stat-bands').textContent = bands;
+  document.getElementById('stat-px').textContent    = pixels.reduce((a,b)=>a+b,0);
+  document.getElementById('stat-bytes').textContent = W*bands;
+}
+
+// ── FILE I/O ─────────────────────────────────────────────────────────────────
+function copyOut() {
+  const text=document.getElementById('out-body').innerText;
+  navigator.clipboard.writeText(text).then(()=>{
+    const b=document.getElementById('copy-btn');
+    const o=b.textContent; b.textContent='COPIED!';
+    setTimeout(()=>b.textContent=o,1400);
+  });
+}
+
+function saveFile() {
+  const data=encode();
+  const bands=H/8;
+  const header=`; SC61860 LCD EDITOR SAVE FILE\n; W=${W} H=${H} BANDS=${bands}\n; RAWBYTES\n`;
+  const raw=Array.from(data).map(b=>b.toString(16).padStart(2,'0')).join(' ');
+  const blob=new Blob([header+raw+'\n'],{type:'text/plain'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=`lcd_${W}x${H}.lcd`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(a.href),800);
+}
+
+function loadFile(input) {
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const text=e.target.result;
+    // Try native save format
+    const wm=text.match(/W=(\d+)/i), hm=text.match(/H=(\d+)/i);
+    const rm=text.match(/RAWBYTES\s*\n([0-9a-fA-F \t\r\n]+)/);
+    if (wm && hm && rm) {
+      const nw=parseInt(wm[1]), nh=parseInt(hm[1]);
+      const vals=rm[1].trim().split(/\s+/).filter(Boolean).map(s=>parseInt(s,16));
+      const expected=nw*Math.ceil(nh/8);
+      if (vals.length===expected && vals.every(n=>!isNaN(n))) {
+        W=nw; H=nh;
+        document.getElementById('width-inp').value=nw;
+        document.getElementById('height-inp').value=nh;
+        document.getElementById('device-sel').value='custom';
+        pixels=new Uint8Array(W*H);
+        const bands=H/8;
+        for(let b=0;b<bands;b++) for(let x=0;x<W;x++) {
+          const byte=vals[b*W+x];
+          for(let bit=0;bit<8;bit++) { const y=b*8+bit; if(y<H) pixels[y*W+x]=(byte>>bit)&1; }
+        }
+        resizeCanvas(); render(); updateOutput(); updateStats();
+        return;
+      }
+    }
+    // Fallback: parse any space/comma separated hex or decimal values
+    const vals=text.replace(/[;'][^\n]*/g,'')
+      .split(/[\s,]+/).filter(Boolean)
+      .map(s=>s.match(/^(0x|&H|\$)/i)?parseInt(s.replace(/^(0x|&H|\$)/i,''),16):
+             /^[0-9]+$/.test(s)?parseInt(s,10):parseInt(s,16))
+      .filter(n=>!isNaN(n)&&n>=0&&n<=255);
+    if (vals.length>0) {
+      const bands=Math.max(1,Math.ceil(vals.length/W));
+      H=bands*8; document.getElementById('height-inp').value=H;
+      pixels=new Uint8Array(W*H);
+      for(let b=0;b<bands&&b*W<vals.length;b++)
+        for(let x=0;x<W&&b*W+x<vals.length;x++) {
+          const byte=vals[b*W+x];
+          for(let bit=0;bit<8;bit++){const y=b*8+bit;if(y<H)pixels[y*W+x]=(byte>>bit)&1;}
+        }
+      resizeCanvas(); render(); updateOutput(); updateStats();
+    } else {
+      alert('Could not parse file.\nExpected .lcd save file, or space/comma-separated hex or decimal bytes.');
+    }
+  };
+  reader.readAsText(file);
+}
+</script>
+</body>
+</html>
