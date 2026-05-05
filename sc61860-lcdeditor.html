@@ -796,54 +796,199 @@ function saveFile() {
   setTimeout(()=>URL.revokeObjectURL(a.href),800);
 }
 
+// ── VALUE PARSER — understands 0x__, &H__, $__, decimal, plain hex ──────────
+function parseVal(s) {
+  s = s.trim();
+  if (/^0x/i.test(s))  return parseInt(s.slice(2), 16);
+  if (/^&H/i.test(s))  return parseInt(s.slice(2), 16);
+  if (/^\$/  .test(s))  return parseInt(s.slice(1), 16);
+  if (/^[0-9]+$/.test(s)) return parseInt(s, 10);
+  // bare hex digits (e.g. "ff", "3c") — only if no decimal ambiguity
+  if (/^[0-9a-fA-F]+$/.test(s) && /[a-fA-F]/.test(s)) return parseInt(s, 16);
+  return NaN;
+}
+
+// ── STRIP COMMENTS & LABELS, return raw token list ──────────────────────────
+function stripAndTokenise(text) {
+  return text
+    .split('\n')
+    // remove full-line comments (;… or //…)  and inline comments
+    .map(l => l.replace(/;.*$/, '').replace(/\/\/.*$/, ''))
+    // remove assembler directives that are NOT db/dw/byte  (e.g. "org", "section"…)
+    // remove label definitions  (word followed by colon, optional whitespace)
+    .map(l => l.replace(/^\s*[A-Za-z_][A-Za-z0-9_]*\s*:/, ''))
+    // remove "db"/"DB"/".db"/".DB"/"byte"/"BYTE" keyword itself — we only want the values
+    .map(l => l.replace(/^\s*\.?(db|dw|byte)\s+/i, ''))
+    // collapse
+    .join(',')
+    .split(/[\s,]+/)
+    .filter(Boolean);
+}
+
 function loadFile(input) {
-  const file=input.files[0]; if(!file) return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const text=e.target.result;
-    // Try native save format
-    const wm=text.match(/W=(\d+)/i), hm=text.match(/H=(\d+)/i);
-    const rm=text.match(/RAWBYTES\s*\n([0-9a-fA-F \t\r\n]+)/);
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+
+    // ── PATH 1: Native .lcd save file ──────────────────────────────────────
+    const wm = text.match(/W=(\d+)/i);
+    const hm = text.match(/H=(\d+)/i);
+    const rm = text.match(/RAWBYTES\s*[\r\n]+([0-9a-fA-F \t\r\n]+)/);
     if (wm && hm && rm) {
-      const nw=parseInt(wm[1]), nh=parseInt(hm[1]);
-      const vals=rm[1].trim().split(/\s+/).filter(Boolean).map(s=>parseInt(s,16));
-      const expected=nw*Math.ceil(nh/8);
-      if (vals.length===expected && vals.every(n=>!isNaN(n))) {
-        W=nw; H=nh;
-        document.getElementById('width-inp').value=nw;
-        document.getElementById('height-inp').value=nh;
-        document.getElementById('device-sel').value='custom';
-        pixels=new Uint8Array(W*H);
-        const bands=H/8;
-        for(let b=0;b<bands;b++) for(let x=0;x<W;x++) {
-          const byte=vals[b*W+x];
-          for(let bit=0;bit<8;bit++) { const y=b*8+bit; if(y<H) pixels[y*W+x]=(byte>>bit)&1; }
-        }
-        resizeCanvas(); render(); updateOutput(); updateStats();
+      const nw = parseInt(wm[1]), nh = parseInt(hm[1]);
+      const vals = rm[1].trim().split(/\s+/).filter(Boolean).map(s => parseInt(s, 16));
+      const expected = nw * Math.ceil(nh / 8);
+      if (vals.length === expected && vals.every(n => !isNaN(n))) {
+        applyGprintData(nw, nh, vals);
         return;
       }
     }
-    // Fallback: parse any space/comma separated hex or decimal values
-    const vals=text.replace(/[;'][^\n]*/g,'')
-      .split(/[\s,]+/).filter(Boolean)
-      .map(s=>s.match(/^(0x|&H|\$)/i)?parseInt(s.replace(/^(0x|&H|\$)/i,''),16):
-             /^[0-9]+$/.test(s)?parseInt(s,10):parseInt(s,16))
-      .filter(n=>!isNaN(n)&&n>=0&&n<=255);
-    if (vals.length>0) {
-      const bands=Math.max(1,Math.ceil(vals.length/W));
-      H=bands*8; document.getElementById('height-inp').value=H;
-      pixels=new Uint8Array(W*H);
-      for(let b=0;b<bands&&b*W<vals.length;b++)
-        for(let x=0;x<W&&b*W+x<vals.length;x++) {
-          const byte=vals[b*W+x];
-          for(let bit=0;bit<8;bit++){const y=b*8+bit;if(y<H)pixels[y*W+x]=(byte>>bit)&1;}
-        }
-      resizeCanvas(); render(); updateOutput(); updateStats();
-    } else {
-      alert('Could not parse file.\nExpected .lcd save file, or space/comma-separated hex or decimal bytes.');
+
+    // ── PATH 2: Assembly bitmap format  ────────────────────────────────────
+    // Recognise:   label:          (optional)
+    //              db  W, H        ← first db line gives dimensions
+    //              db  b0,b1,…     ← subsequent db lines = row-by-row bitmap data
+    //                                MSB of first byte = leftmost pixel
+    //
+    // Strategy:
+    //   a) Find every "db" (/.db / db / byte) line and collect ALL numeric values.
+    //   b) The first two values are width and height.
+    //   c) Remaining values are bitmap bytes, ceil(W/8) bytes per row, H rows.
+    //
+    // Also handles the case where width+height appear on a single db line
+    // mixed with data (uncommon but tolerated).
+
+    const lines = text.split('\n');
+    // Collect db-bearing lines in order, preserving line grouping
+    const dbLineValues = [];   // array of arrays, one per db line
+    for (const raw of lines) {
+      const stripped = raw.replace(/;.*$/, '').replace(/\/\/.*$/, '');
+      // Match lines that start with optional label, optional dot, then db/dw/byte keyword
+      if (/^\s*([A-Za-z_][A-Za-z0-9_]*\s*:)?\s*\.?(db|dw|byte)\s+/i.test(stripped)) {
+        // Extract just the value tokens after the keyword
+        const afterKw = stripped.replace(/^\s*([A-Za-z_][A-Za-z0-9_]*\s*:)?\s*\.?(db|dw|byte)\s+/i, '');
+        const vals = afterKw.split(',').map(s => parseVal(s.trim())).filter(n => !isNaN(n));
+        if (vals.length > 0) dbLineValues.push(vals);
+      }
     }
+
+    if (dbLineValues.length >= 2) {
+      // First db line should be just width, height
+      const firstLine = dbLineValues[0];
+      let bitmapW, bitmapH, dataVals;
+
+      if (firstLine.length === 2) {
+        // Clean: db W, H  on its own line
+        bitmapW  = firstLine[0];
+        bitmapH  = firstLine[1];
+        dataVals = dbLineValues.slice(1).flat();
+      } else if (firstLine.length > 2) {
+        // Width and height mixed into first line with data
+        bitmapW  = firstLine[0];
+        bitmapH  = firstLine[1];
+        dataVals = [...firstLine.slice(2), ...dbLineValues.slice(1).flat()];
+      } else {
+        // Single-value first line — try combining first two lines as W,H
+        bitmapW  = dbLineValues[0][0];
+        bitmapH  = dbLineValues[1][0];
+        dataVals = dbLineValues.slice(2).flat();
+      }
+
+      const bytesPerRow = Math.ceil(bitmapW / 8);
+      const expected    = bytesPerRow * bitmapH;
+
+      if (
+        bitmapW > 0 && bitmapW <= 512 &&
+        bitmapH > 0 && bitmapH <= 256 &&
+        dataVals.length >= expected &&
+        dataVals.every(n => !isNaN(n) && n >= 0 && n <= 255)
+      ) {
+        applyBitmapData(bitmapW, bitmapH, dataVals.slice(0, expected));
+        return;
+      }
+    }
+
+    // ── PATH 3: Loose hex/decimal byte stream (no size header) ─────────────
+    // Use current W as row width, infer H from byte count.
+    const tokens = stripAndTokenise(text);
+    const vals   = tokens.map(parseVal).filter(n => !isNaN(n) && n >= 0 && n <= 255);
+
+    if (vals.length >= 2) {
+      // Heuristic: first two values plausibly width × height?
+      const maybeW = vals[0], maybeH = vals[1];
+      const bytesPerRow = Math.ceil(maybeW / 8);
+      const expected    = bytesPerRow * maybeH;
+      if (
+        maybeW > 0 && maybeW <= 512 &&
+        maybeH > 0 && maybeH <= 256 &&
+        vals.length - 2 >= expected
+      ) {
+        if (confirm(`Detected ${maybeW}×${maybeH} bitmap (first two bytes = dimensions).\nImport as bitmap?`)) {
+          applyBitmapData(maybeW, maybeH, vals.slice(2, 2 + expected));
+          return;
+        }
+      }
+      // Fallback: treat as raw GPRINT-encoded stream at current W
+      const bands = Math.max(1, Math.ceil(vals.length / W));
+      const nh    = bands * 8;
+      document.getElementById('height-inp').value = nh;
+      applyGprintData(W, nh, vals);
+      return;
+    }
+
+    alert(
+      'Could not parse file.\n\n' +
+      'Supported formats:\n' +
+      '  • Native .lcd save file\n' +
+      '  • Assembly bitmap:  db W,H / db b0,b1,…  (row-by-row, MSB=left)\n' +
+      '  • Raw hex/decimal byte stream'
+    );
   };
   reader.readAsText(file);
+}
+
+// ── APPLY BITMAP DATA (row-by-row, MSB = leftmost pixel) ────────────────────
+function applyBitmapData(nw, nh, data) {
+  // Snap height to multiple of 8 for GPRINT band compatibility
+  const nh8    = Math.ceil(nh / 8) * 8;
+  const bytesPerRow = Math.ceil(nw / 8);
+  W = nw; H = nh8;
+  document.getElementById('width-inp').value  = nw;
+  document.getElementById('height-inp').value = nh8;
+  document.getElementById('device-sel').value = 'custom';
+  pixels = new Uint8Array(W * H);
+  for (let y = 0; y < nh && y < H; y++) {
+    for (let bx = 0; bx < bytesPerRow; bx++) {
+      const byte = data[y * bytesPerRow + bx] ?? 0;
+      for (let bit = 0; bit < 8; bit++) {
+        const x = bx * 8 + bit;
+        if (x < W) pixels[y * W + x] = (byte >> (7 - bit)) & 1;  // MSB = leftmost
+      }
+    }
+  }
+  resizeCanvas(); render(); updateOutput(); updateStats();
+}
+
+// ── APPLY GPRINT DATA (band-by-band, Bit0=top) ──────────────────────────────
+function applyGprintData(nw, nh, data) {
+  const nh8 = Math.ceil(nh / 8) * 8;
+  const bands = nh8 / 8;
+  W = nw; H = nh8;
+  document.getElementById('width-inp').value  = nw;
+  document.getElementById('height-inp').value = nh8;
+  document.getElementById('device-sel').value = 'custom';
+  pixels = new Uint8Array(W * H);
+  for (let b = 0; b < bands; b++) {
+    for (let x = 0; x < W && b * W + x < data.length; x++) {
+      const byte = data[b * W + x];
+      for (let bit = 0; bit < 8; bit++) {
+        const y = b * 8 + bit;
+        if (y < H) pixels[y * W + x] = (byte >> bit) & 1;
+      }
+    }
+  }
+  resizeCanvas(); render(); updateOutput(); updateStats();
 }
 </script>
 </body>
