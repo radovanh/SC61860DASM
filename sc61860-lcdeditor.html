@@ -362,6 +362,9 @@ function applyPreset() {
   if (!PRESETS[v]) return;
   document.getElementById('width-inp').value  = PRESETS[v][0];
   document.getElementById('height-inp').value = PRESETS[v][1];
+  // Keep the BASIC export device selector in sync
+  const basicSel = document.getElementById('basic-device-sel');
+  if (basicSel && basicSel.querySelector(`option[value="${v}"]`)) basicSel.value = v;
   resizeGrid(false);
 }
 function markCustom() { document.getElementById('device-sel').value = 'custom'; }
@@ -370,6 +373,11 @@ function markCustom() { document.getElementById('device-sel').value = 'custom'; 
 function init() {
   pixels = new Uint8Array(W * H);
   resizeCanvas(); render(); updateOutput(); updateStats(); initToggles();
+  // Sync BASIC export device to the initially selected device preset
+  const devSel   = document.getElementById('device-sel');
+  const basicSel = document.getElementById('basic-device-sel');
+  if (devSel && basicSel && basicSel.querySelector(`option[value="${devSel.value}"]`))
+    basicSel.value = devSel.value;
 }
 window.addEventListener('load', init);
 
