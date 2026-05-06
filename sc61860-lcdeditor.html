@@ -152,7 +152,10 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .out-tabs {
   flex-shrink:0; display:flex; border-bottom:1px solid var(--border); background:var(--panel);
+  overflow-x:auto; align-items:stretch;
 }
+.out-tabs::-webkit-scrollbar { height:3px; }
+.out-tabs::-webkit-scrollbar-thumb { background:var(--border); }
 .out-tab {
   padding:6px 15px; font-family:'Orbitron',monospace; font-size:10px; font-weight:700;
   letter-spacing:1px; color:var(--muted); cursor:pointer;
@@ -277,6 +280,29 @@ footer em { color:var(--text); font-style:normal; }
       <div class="out-tab"        id="tab-asm"     onclick="switchTab('asm')">ASM (.DB)</div>
       <div class="out-tab"        id="tab-raw"     onclick="switchTab('raw')">RAW BYTES</div>
       <div class="out-tab"        id="tab-bitmap"  onclick="switchTab('bitmap')">BITMAP DUMP</div>
+      <div class="out-tab"        id="tab-basic"   onclick="switchTab('basic')">BASIC EXPORT</div>
+      <div id="basic-export-controls" style="display:none;align-items:center;gap:6px;padding:0 10px;border-left:1px solid var(--border);flex-shrink:0">
+        <span style="font-size:10px;color:var(--muted);letter-spacing:1px;white-space:nowrap">DEVICE</span>
+        <select id="basic-device-sel" onchange="updateOutput()" style="font-size:10px;height:22px;padding:2px 5px">
+          <option value="g850">PC-G850V</option>
+          <option value="g815">PC-G815</option>
+          <option value="1360">PC-1360</option>
+          <option value="1600">PC-1600</option>
+        </select>
+        <span style="font-size:10px;color:var(--muted);letter-spacing:1px;white-space:nowrap">GCURSOR X</span>
+        <input type="number" id="basic-gcursor-x" value="0" min="0" max="383" oninput="updateOutput()"
+          style="width:50px;font-size:11px;height:22px;padding:2px 5px">
+        <span style="font-size:10px;color:var(--muted);letter-spacing:1px;white-space:nowrap">Y</span>
+        <input type="number" id="basic-gcursor-y" value="0" min="0" max="127" oninput="updateOutput()"
+          style="width:50px;font-size:11px;height:22px;padding:2px 5px">
+        <span style="font-size:10px;color:var(--muted);letter-spacing:1px;white-space:nowrap">LINE START</span>
+        <input type="number" id="basic-line-start" value="10" min="1" max="9999" step="10" oninput="updateOutput()"
+          style="width:55px;font-size:11px;height:22px;padding:2px 5px">
+        <span style="font-size:10px;color:var(--muted);letter-spacing:1px;white-space:nowrap">STEP</span>
+        <input type="number" id="basic-line-step" value="10" min="1" max="100" oninput="updateOutput()"
+          style="width:45px;font-size:11px;height:22px;padding:2px 5px">
+        <button class="btn btn-orange" style="height:22px;font-size:9px" onclick="downloadBasic()">&#8595; .BAS</button>
+      </div>
     </div>
     <div class="out-body" id="out-body"></div>
   </div>
@@ -608,22 +634,29 @@ function buildGprint(data) {
 }
 
 function buildGstring(data) {
-  const bands=H/8;
-  const L=[];
+  const bands = H / 8;
+  const L = [];
   L.push(`' Sharp GPRINT string mode — W=${W} H=${H}`);
   L.push(`' Each byte → 2 hex chars: lo-nibble (top 4 dots) first, hi-nibble (bottom 4) second`);
   L.push(`' Top 4 ON → "F0" (lo=F=&H0F, hi=0) | Bottom 4 ON → "0F" (lo=0, hi=F=&HF0)`);
+  // Max GPRINT line length is 80 chars total (including GPRINT "…")
+  // GPRINT "  = 8 chars prefix, closing " = 1 char → 9 overhead → max 71 chars of data
+  // But each encoded byte = 2 hex chars, so max whole-bytes per segment = floor(71/2) = 35
+  const MAX_LINE = 80;
+  const PREFIX   = 'GPRINT "'; // 8 chars
+  const SUFFIX   = '"';        // 1 char
+  const maxDataChars = MAX_LINE - PREFIX.length - SUFFIX.length; // 71
+  // Must be even (whole bytes only)
+  const maxColsPerSegment = Math.floor(maxDataChars / 2); // 35 columns per line segment
+  L.push(`' Lines split to max ${MAX_LINE} chars (${maxColsPerSegment} columns per GPRINT statement)`);
   L.push('');
-  for (let b=0;b<bands;b++) {
-    let s='';
-    for (let x=0;x<W;x++) s+=bToGS(data[b*W+x]);
-    L.push(`' Band ${b} (rows ${b*8}–${b*8+7}) — ${W*2} chars:`);
-    L.push(`GPRINT "${s}"`);
-    // column-group annotation
-    if (W<=96) {
-      let ann="'  cols: ";
-      for (let x=0;x<W;x++) { ann+=(x%8===0&&x>0)?'|':' '; ann+=x.toString().padStart(2,' '); if(x%8===7)ann+=' '; }
-      // just show ruler
+  for (let b = 0; b < bands; b++) {
+    L.push(`' Band ${b} (rows ${b*8}–${b*8+7}) — ${W*2} encoded chars, ${Math.ceil(W/maxColsPerSegment)} line(s):`);
+    for (let ci = 0; ci < W; ci += maxColsPerSegment) {
+      const end = Math.min(ci + maxColsPerSegment, W);
+      let s = '';
+      for (let x = ci; x < end; x++) s += bToGS(data[b * W + x]);
+      L.push(`GPRINT "${s}"`);
     }
     L.push('');
   }
@@ -739,8 +772,9 @@ function buildBitmap() {
 // ── OUTPUT ───────────────────────────────────────────────────────────────────
 function switchTab(t) {
   outTab=t;
-  ['gprint','gstring','asm','raw','bitmap'].forEach(x =>
+  ['gprint','gstring','asm','raw','bitmap','basic'].forEach(x =>
     document.getElementById('tab-'+x).classList.toggle('active',x===t));
+  document.getElementById('basic-export-controls').style.display = (t==='basic') ? 'flex' : 'none';
   updateOutput();
 }
 
@@ -751,12 +785,13 @@ function updateOutput() {
   else if (outTab==='gstring') lines=buildGstring(data);
   else if (outTab==='asm')     lines=buildAsm(data);
   else if (outTab==='bitmap')  lines=buildBitmap();
+  else if (outTab==='basic')   lines=buildBasic(data);
   else                         lines=buildRaw(data);
 
   // highlight
   document.getElementById('out-body').innerHTML = lines.join('\n')
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/\b(DATA|GPRINT|FOR|NEXT|POKE|READ)\b/g,'<span class="kw">$1</span>')
+    .replace(/\b(DATA|GPRINT|GCURSOR|FOR|TO|STEP|NEXT|POKE|READ|RESTORE|REM)\b/g,'<span class="kw">$1</span>')
     .replace(/\b(\.DB|\.db)\b/g,'<span class="kw">$1</span>')
     .replace(/^(LCD_DATA:|lcd_bitmap:)/gm,'<span class="addr">$1</span>')
     .replace(/(&quot;[^&]*&quot;)/g,'<span class="str">$1</span>')
@@ -797,7 +832,185 @@ function saveFile() {
   setTimeout(()=>URL.revokeObjectURL(a.href),800);
 }
 
-// ── VALUE PARSER — understands 0x__, &H__, $__, decimal, plain hex ──────────
+// ── BASIC EXPORT ─────────────────────────────────────────────────────────────
+// Generates a complete runnable SHARP S-BASIC program that:
+//   1. Uses GCURSOR to position the graphics cursor
+//   2. Reads bytes from DATA statements and prints them with GPRINT
+//   3. DATA statements are at the END of the program (loaded last),
+//      with each DATA line ≤ 80 chars total (including line number).
+//
+// GPRINT in string mode writes a band of 8 pixel rows at the current
+// graphics cursor position. Each byte encodes 8 vertical pixels for one
+// column: bit 0 = top, bit 7 = bottom.
+//
+// Device notes:
+//   PC-G850V / PC-G815 : GCURSOR(col,band)  col=0..143, band=0..5
+//   PC-1360            : GCURSOR(col,row)   col=0..149, row=0..3 (each row = 8px)
+//   PC-1600            : GCURSOR(col,band)  col=0..155, band=0..3
+//
+// All devices: GPRINT "XX…" where XX = 2 hex chars per column-byte
+//              (lo-nibble of byte first, then hi-nibble)
+//
+// The program loops over all bands, sets GCURSOR for each band row, then
+// issues GPRINT statements for each segment of ≤35 columns (≤71 hex chars)
+// so that the total line length (line number + GPRINT "…") stays ≤ 80 chars.
+
+function buildBasic(data) {
+  const devId    = (document.getElementById('basic-device-sel')  || {}).value || 'g850';
+  const gcurX    = parseInt((document.getElementById('basic-gcursor-x') || {}).value) || 0;
+  const gcurY    = parseInt((document.getElementById('basic-gcursor-y') || {}).value) || 0;
+  const lineStart= Math.max(1, parseInt((document.getElementById('basic-line-start') || {}).value) || 10);
+  const lineStep = Math.max(1, parseInt((document.getElementById('basic-line-step')  || {}).value) || 10);
+
+  const bands = H / 8;
+
+  // ── Line-length budget ────────────────────────────────────────────────────
+  // Sharp BASIC line format: "NNNNN GPRINT "XX…XX""
+  // Max line number  = 5 digits + 1 space = 6 chars overhead.
+  // GPRINT "…"       = 9 chars overhead (GPRINT " and ")
+  // Total overhead   = 15 chars  →  max data chars = 80-15 = 65  → 32 columns/line
+  // (keep it conservative: use floor(65/2)*2 = 64 data chars = 32 columns)
+  const MAX_LINE_LEN = 80;
+  const LINE_NUM_W   = 5;  // max digits in a BASIC line number
+  const LINE_OVERHEAD= LINE_NUM_W + 1 + 8 + 1; // "NNNNN GPRINT "" + closing "
+  const maxDataChars = MAX_LINE_LEN - LINE_OVERHEAD;           // 65
+  const maxColsPerGP = Math.floor(maxDataChars / 2);           // 32
+
+  // ── DATA line budget ──────────────────────────────────────────────────────
+  // "NNNNN DATA &HXX,&HXX,…"
+  // Each hex value = 5 chars (&HXX,) except last = 4; use 5 to be safe.
+  // Overhead = 6 (line num+space) + 5 (DATA ) = 11
+  // Available = 80-11 = 69 chars → floor(69/5) = 13 values/line (hex mode)
+  // In dec mode each value is 1-3 chars + comma = up to 4; use 4: floor(69/4)=17
+  // We'll compute dynamically per value for correctness.
+
+  // Pre-compute all bytes as formatted strings
+  const fmtB = b => '&H' + b.toString(16).toUpperCase().padStart(2,'0');
+  const totalBytes = data.length;
+
+  // Build DATA lines — pack as many values per line as fit within 80 chars
+  // Line format: "NNNNN DATA v,v,v,…"
+  const DATA_KW_LEN = 5; // "DATA "
+  const dataGroups = []; // array of arrays of formatted strings
+  let   curGroup   = [];
+  let   curLen     = LINE_NUM_W + 1 + DATA_KW_LEN; // "NNNNN DATA "
+  for (let i = 0; i < totalBytes; i++) {
+    const s   = fmtB(data[i]);
+    const add = (curGroup.length > 0 ? 1 : 0) + s.length; // comma + value
+    if (curGroup.length > 0 && curLen + add > MAX_LINE_LEN) {
+      dataGroups.push(curGroup);
+      curGroup = [s];
+      curLen   = LINE_NUM_W + 1 + DATA_KW_LEN + s.length;
+    } else {
+      curGroup.push(s);
+      curLen += add;
+    }
+  }
+  if (curGroup.length > 0) dataGroups.push(curGroup);
+
+  // ── Assign line numbers ───────────────────────────────────────────────────
+  let ln = lineStart;
+  const S = lineStep;
+  const program = []; // { ln, text }
+
+  const emit = (text) => { program.push({ ln, text }); ln += S; };
+
+  // ── Preamble comments ────────────────────────────────────────────────────
+  const devNames = {g850:'PC-G850V',g815:'PC-G815','1360':'PC-1360','1600':'PC-1600'};
+  emit(`REM LCD IMAGE W=${W} H=${H} DEV=${devNames[devId]||devId}`);
+  emit(`REM GCURSOR BASE X=${gcurX} Y=${gcurY}`);
+  emit(`REM ${totalBytes} BYTES  ${bands} BANDS  ${dataGroups.length} DATA LINES`);
+
+  // ── Count total GPRINT statements needed ─────────────────────────────────
+  // So we can build the RESTORE + READ loop correctly.
+  // We restore DATA pointer at the start, then read one byte per iteration.
+  const dataLineStart = ln + (bands * Math.ceil(W / maxColsPerGP) + 2) * S;
+  // (We'll patch this with the actual first DATA line number below)
+  // For now, collect the GPRINT section and DATA section separately,
+  // then assemble the final program in correct order.
+
+  // ── Phase 1: build GPRINT display section (no line numbers yet) ──────────
+  // We build the loop body as a flat list of statements, then assign line numbers.
+  // Strategy: band loop unrolled (cleaner, avoids needing arrays at runtime).
+  // For each band b:
+  //   GCURSOR gcurX, gcurY+b    (or device-specific form)
+  //   GPRINT "XX…XX"  (split if needed)
+
+  const displayStmts = []; // plain statement strings, no line numbers
+
+  for (let b = 0; b < bands; b++) {
+    // GCURSOR — device-specific syntax
+    // All supported devices use GCURSOR(col,row) where row = band index + base
+    const gc_col = gcurX;
+    const gc_row = gcurY + b;
+    displayStmts.push(`GCURSOR ${gc_col},${gc_row}`);
+
+    for (let ci = 0; ci < W; ci += maxColsPerGP) {
+      const end = Math.min(ci + maxColsPerGP, W);
+      let s = '';
+      for (let x = ci; x < end; x++) s += bToGS(data[b * W + x]);
+      displayStmts.push(`GPRINT "${s}"`);
+    }
+  }
+
+  // Reserve line number for the "RESTORE <data_line>" statement
+  // We need to know data line numbers BEFORE emitting them, so we count
+  // display lines first, then compute where DATA starts.
+  // displayStmts count + 1 (RESTORE) + 1 (END) lines before DATA
+  const displayLineCount  = displayStmts.length;
+  const headerLineCount   = 3; // the 3 REM lines already emitted
+  const restoreLineCount  = 1;
+  const endLineCount      = 1;
+  const totalPreDataLines = headerLineCount + restoreLineCount + displayLineCount + endLineCount;
+  const firstDataLn = lineStart + totalPreDataLines * S;
+
+  // Now re-emit the program in correct order.
+  // Reset: we already have 3 REM lines in program[]. We need to insert RESTORE before display.
+  emit(`RESTORE ${firstDataLn}`);
+
+  // GPRINT display loop
+  for (const stmt of displayStmts) emit(stmt);
+
+  emit(`END`);
+
+  // DATA section
+  for (const grp of dataGroups) emit(`DATA ${grp.join(',')}`);
+
+  // ── Render as text ────────────────────────────────────────────────────────
+  const L = [];
+  L.push(`' ─────────────────────────────────────────────────────`);
+  L.push(`' SHARP S-BASIC LCD GPRINT PROGRAM`);
+  L.push(`' Device  : ${devNames[devId]||devId}  (${W}×${H} pixels, ${bands} band${bands>1?'s':''})`);
+  L.push(`' Image   : ${W} cols × ${H} rows`);
+  L.push(`' GCursor : base col=${gcurX}, base band=${gcurY}`);
+  L.push(`' Bytes   : ${totalBytes} (${dataGroups.length} DATA line${dataGroups.length!==1?'s':''})`);
+  L.push(`' Max line length enforced: ${MAX_LINE_LEN} chars`);
+  L.push(`' ─────────────────────────────────────────────────────`);
+  L.push('');
+
+  for (const { ln: num, text } of program) {
+    L.push(`${num} ${text}`);
+  }
+
+  return L;
+}
+
+// ── DOWNLOAD .BAS ─────────────────────────────────────────────────────────────
+function downloadBasic() {
+  const data  = encode();
+  const lines = buildBasic(data);
+  // Strip the comment header (lines starting with ') and blank leading lines
+  const basicLines = lines.filter(l => !l.startsWith("'") && !(l === '' && basicLines.length === 0));
+  // Actually keep everything — some BASIC dialects support ' as REM
+  const text = lines.join('\r\n') + '\r\n';
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a    = document.createElement('a');
+  const dev  = (document.getElementById('basic-device-sel')||{}).value || 'bas';
+  a.href     = URL.createObjectURL(blob);
+  a.download = `lcd_${W}x${H}_${dev}.bas`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 800);
+}
 function parseVal(s) {
   s = s.trim();
   if (/^0x/i.test(s))  return parseInt(s.slice(2), 16);
