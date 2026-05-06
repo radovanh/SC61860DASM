@@ -933,11 +933,16 @@ function saveFile() {
 // exactly W entries total, so the split is transparent to the program.
 
 function buildBasic(data) {
-  const devId     = (document.getElementById('basic-device-sel')  || {}).value || 'g850';
-  const gcurX     = parseInt((document.getElementById('basic-gcursor-x') || {}).value) || 0;
-  const gcurY     = parseInt((document.getElementById('basic-gcursor-y') || {}).value) || 0;
-  const lineStart = Math.max(1, parseInt((document.getElementById('basic-line-start') || {}).value) || 10);
-  const lineStep  = Math.max(1, parseInt((document.getElementById('basic-line-step')  || {}).value) || 10);
+  const devEl     = document.getElementById('basic-device-sel');
+  const devId     = devEl ? devEl.value : 'g850';
+  const gcurXEl   = document.getElementById('basic-gcursor-x');
+  const gcurYEl   = document.getElementById('basic-gcursor-y');
+  const lsEl      = document.getElementById('basic-line-start');
+  const lstepEl   = document.getElementById('basic-line-step');
+  const gcurX     = gcurXEl   ? (parseInt(gcurXEl.value)   || 0) : 0;
+  const gcurY     = gcurYEl   ? (parseInt(gcurYEl.value)   || 0) : 0;
+  const lineStart = Math.max(1, lsEl    ? (parseInt(lsEl.value)    || 10) : 10);
+  const lineStep  = Math.max(1, lstepEl ? (parseInt(lstepEl.value) || 10) : 10);
 
   const bands   = H / 8;
   const devNames = { g850:'PC-G850V', g815:'PC-G815', '1360':'PC-1360', '1600':'PC-1600' };
@@ -1026,17 +1031,19 @@ function buildBasic(data) {
 function downloadBasic() {
   const data  = encode();
   const lines = buildBasic(data);
-  // Strip the comment header (lines starting with ') and blank leading lines
-  const basicLines = lines.filter(l => !l.startsWith("'") && !(l === '' && basicLines.length === 0));
-  // Actually keep everything — some BASIC dialects support ' as REM
-  const text = lines.join('\r\n') + '\r\n';
-  const blob = new Blob([text], { type: 'text/plain' });
-  const a    = document.createElement('a');
-  const dev  = (document.getElementById('basic-device-sel')||{}).value || 'bas';
-  a.href     = URL.createObjectURL(blob);
+  // Strip the ' comment header lines — keep only numbered BASIC lines
+  const text  = lines.filter(l => !l.trimStart().startsWith("'") && l !== '').join('\r\n') + '\r\n';
+  const blob  = new Blob([text], { type: 'text/plain' });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement('a');
+  const devEl = document.getElementById('basic-device-sel');
+  const dev   = devEl ? devEl.value : 'bas';
+  a.href     = url;
   a.download = `lcd_${W}x${H}_${dev}.bas`;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(a.href), 800);
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 2000);
 }
 function parseVal(s) {
   s = s.trim();
