@@ -789,51 +789,86 @@ function updateOutput() {
   else                         lines=buildRaw(data);
 
   // ── Syntax highlighting ──────────────────────────────────────────────────
-  // We must NOT HTML-escape before running regexes, because &H in BASIC values
-  // would become &amp;H and then the comment regex (;[^\n]*) would match ;H00.
-  // Strategy: highlight on raw text using non-HTML placeholder spans, then
-  // escape HTML and substitute placeholders back.
+  // Pipeline must be carefully ordered to avoid:
+  //   (a) & in &H00 being split by the comment regex when ; appears after HTML-escaping
+  //   (b) the comment regex matching ; inside already-inserted </span> tags
   //
-  // Simpler approach: escape HTML first but then fix the comment regex to
-  // only match actual ; or ' comment leaders, not &amp; sequences.
-  // We use a two-pass approach:
-  //   1. Replace special non-HTML chars that need protection with Unicode PUA placeholders
-  //   2. HTML-escape
-  //   3. Restore + apply syntax colouring
+  // Safe order:
+  //   1. On raw text: mark comment spans (whole lines starting with ; or ')
+  //      using placeholder tokens — before any HTML escaping or keyword spans
+  //   2. HTML-escape the full string
+  //   3. Restore comment placeholders as proper <span class="cmt">…</span>
+  //   4. Apply keyword / label / string highlighting
+  //      (comment content is already wrapped so keywords inside comments won't double-wrap)
 
-  // Encode & sequences that are data (&H, &O, &B BASIC prefixes) before escaping
-  // Replace &H &O &B (BASIC numeric prefixes) with placeholder
-  const PH_AMP = '\uE000'; // private use area placeholder for & in &H / &O / &B
-  let raw = lines.join('\n')
-    .replace(/&([HOBhob])/g, PH_AMP + '$1'); // protect &H &O &B prefixes
+  const PH_CMT_O  = '\uE001'; // placeholder for <span class="cmt">
+  const PH_CMT_C  = '\uE002'; // placeholder for </span>
+  const PH_BPX_O  = '\uE003';
+  const PH_BPX_C  = '\uE004';
+  const PH_KW_O   = '\uE005';
+  const PH_KW_C   = '\uE006';
+  const PH_ADDR_O = '\uE007';
+  const PH_ADDR_C = '\uE008';
+  const PH_STR_O  = '\uE009';
+  const PH_STR_C  = '\uE00A';
 
-  // Now safe to HTML-escape (remaining & are truly ampersands in comments etc.)
+  // Step 1: work on raw (unescaped) text
+  // Mark comment lines/segments. A comment starts at:
+  //   - a bare ' at the start of a line (BASIC REM shorthand)
+  //   - a bare ; anywhere that is NOT preceded by & (so &H; never triggers this,
+  //     though in practice &H is never followed by ;)
+  // Simplest safe rule: comments are lines that start with ' or ;
+  // and inline ; comments in ASM lines.
+  let raw = lines.join('\n');
+
+  // Mark whole-line ' comments (BASIC) — lines starting with optional whitespace then '
+  raw = raw.replace(/^([^'\n]*)(\'[^\n]*)$/gm, (_, before, comment) => {
+    // Wrap the visual part (█·…) inside the comment too
+    const inner = comment.replace(/([█·…]+)/g, PH_BPX_O + '$1' + PH_BPX_C);
+    return before + PH_CMT_O + inner + PH_CMT_C;
+  });
+
+  // Mark ; comments — match ; that is NOT part of &H/&O/&B and not inside already-marked comment
+  // Since we haven't inserted any HTML yet, bare ; in real comments are safe to match.
+  // The &H pattern: & is always immediately followed by H/O/B, never by ;
+  // So any ; in the raw text is a genuine comment starter (ASM style).
+  raw = raw.replace(/(;[^\n]*)/g, (m) => {
+    const inner = m.replace(/([█·…]+)/g, PH_BPX_O + '$1' + PH_BPX_C);
+    return PH_CMT_O + inner + PH_CMT_C;
+  });
+
+  // Step 2: HTML-escape the entire string (safe — no HTML tags yet, only PUA placeholders)
   raw = raw
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;');
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  // & in &H is now &amp;H — correct for display, and PUA chars are untouched
 
-  // Restore BASIC numeric prefixes
-  raw = raw.replace(new RegExp(PH_AMP, 'g'), '&amp;');
-  // Now &H appears as &amp;H in the HTML — correct display, and no ; splitting
-
-  // Apply syntax highlighting on the HTML-safe string
+  // Step 3: restore comment placeholders
   raw = raw
-    // BASIC / ASM keywords (word boundary safe now that & is &amp;)
-    .replace(/\b(DATA|GPRINT|GCURSOR|FOR|TO|STEP|NEXT|POKE|READ|RESTORE|REM|END)\b/g,
-             '<span class="kw">$1</span>')
-    .replace(/\b(\.DB|\.db)\b/g,'<span class="kw">$1</span>')
-    // Labels
-    .replace(/^(LCD_DATA:|lcd_bitmap:)/gm,'<span class="addr">$1</span>')
-    // Quoted strings  (match &quot; … &quot;, content may contain &amp; etc.)
-    .replace(/(&quot;[^"]*?&quot;)/g,'<span class="str">$1</span>')
-    // Comments: lines/segments starting with ; or '
-    // Must NOT match ;H00 inside &amp;H00 — but those are now &amp;H so ; never leads
-    .replace(/(;[^\n]*)/g, m => {
-      const highlighted = m.replace(/([█·…]+)/g, '<span class="bpx">$1</span>');
-      return `<span class="cmt">${highlighted}</span>`;
-    })
-    .replace(/(&#x27;[^\n]*)/g, m => `<span class="cmt">${m}</span>`);
+    .replace(new RegExp(PH_CMT_O, 'g'), '<span class="cmt">')
+    .replace(new RegExp(PH_CMT_C, 'g'), '</span>')
+    .replace(new RegExp(PH_BPX_O, 'g'), '<span class="bpx">')
+    .replace(new RegExp(PH_BPX_C, 'g'), '</span>');
+
+  // Step 4: keyword, label, string highlighting
+  // These regexes run on HTML that now contains <span class="cmt">…</span> blocks.
+  // We only want to highlight OUTSIDE comment spans. The simplest correct approach:
+  // split on comment spans, highlight the non-comment parts, reassemble.
+  const CMT_SPLIT = /(<span class="cmt">[\s\S]*?<\/span>)/g;
+  raw = raw.split(CMT_SPLIT).map((chunk, i) => {
+    // Even-indexed chunks are non-comment text; odd-indexed are comment spans — leave alone
+    if (i % 2 !== 0) return chunk;
+    return chunk
+      // BASIC / ASM keywords
+      .replace(/\b(DATA|GPRINT|GCURSOR|FOR|TO|STEP|NEXT|POKE|READ|RESTORE|REM|END|DIM)\b/g,
+               '<span class="kw">$1</span>')
+      .replace(/\b(\.DB|\.db)\b/g, '<span class="kw">$1</span>')
+      // Labels
+      .replace(/^(LCD_DATA:|lcd_bitmap:)/gm, '<span class="addr">$1</span>')
+      // Quoted strings — after HTML escaping, quotes are &quot;
+      .replace(/(&quot;[^&]*?&quot;)/g, '<span class="str">$1</span>');
+  }).join('');
 
   document.getElementById('out-body').innerHTML = raw;
 }
@@ -869,27 +904,33 @@ function saveFile() {
 }
 
 // ── BASIC EXPORT ─────────────────────────────────────────────────────────────
-// Generates a complete runnable SHARP S-BASIC program that:
-//   1. Uses GCURSOR to position the graphics cursor
-//   2. Reads bytes from DATA statements and prints them with GPRINT
-//   3. DATA statements are at the END of the program (loaded last),
-//      with each DATA line ≤ 80 chars total (including line number).
+// Program structure:
+//   X = <gcurX>
+//   DIM A$(W-1)
+//   FOR Y = <gcurY> TO <gcurY + H - 8> STEP 8
+//     FOR I = 0 TO W-1
+//       READ A$(I)
+//     NEXT I
+//     GCURSOR (X,Y)
+//     GPRINT A$
+//   NEXT Y
+//   END
+//   DATA "XX…"   ← one DATA line per band (split to ≤80 chars if W is large)
 //
-// GPRINT in string mode writes a band of 8 pixel rows at the current
-// graphics cursor position. Each byte encodes 8 vertical pixels for one
-// column: bit 0 = top, bit 7 = bottom.
+// GPRINT A$ with A$ as a string array: Sharp BASIC concatenates A$(0)…A$(W-1)
+// automatically when you write GPRINT A$ with A$ dimensioned as an array.
+// Each A$(I) holds the 2-char hex encoding of one column byte.
+// (lo-nibble first, hi-nibble second — standard Sharp GPRINT string format)
 //
-// Device notes:
-//   PC-G850V / PC-G815 : GCURSOR(col,band)  col=0..143, band=0..5
-//   PC-1360            : GCURSOR(col,row)   col=0..149, row=0..3 (each row = 8px)
-//   PC-1600            : GCURSOR(col,band)  col=0..155, band=0..3
+// DATA lines: each value is a 2-char hex string, quoted, comma-separated.
+// Line budget: "NNNNN DATA "XX","XX",…"
+//   Each entry = 4 chars ("XX") + 1 comma = 5, last entry = 4.
+//   Overhead = 5 (linenum) + 1 (space) + 5 (DATA ) = 11.
+//   Max entries per line = floor((80 - 11 + 1) / 5) = 14 columns per DATA line.
+//   (The +1 accounts for the missing trailing comma on the last value.)
 //
-// All devices: GPRINT "XX…" where XX = 2 hex chars per column-byte
-//              (lo-nibble of byte first, then hi-nibble)
-//
-// The program loops over all bands, sets GCURSOR for each band row, then
-// issues GPRINT statements for each segment of ≤35 columns (≤71 hex chars)
-// so that the total line length (line number + GPRINT "…") stays ≤ 80 chars.
+// If W > 14 the band's data spans multiple DATA lines — the READ loop reads
+// exactly W entries total, so the split is transparent to the program.
 
 function buildBasic(data) {
   const devId     = (document.getElementById('basic-device-sel')  || {}).value || 'g850';
@@ -898,113 +939,84 @@ function buildBasic(data) {
   const lineStart = Math.max(1, parseInt((document.getElementById('basic-line-start') || {}).value) || 10);
   const lineStep  = Math.max(1, parseInt((document.getElementById('basic-line-step')  || {}).value) || 10);
 
-  const bands = H / 8;
-  const devNames = {g850:'PC-G850V', g815:'PC-G815', '1360':'PC-1360', '1600':'PC-1600'};
+  const bands   = H / 8;
+  const devNames = { g850:'PC-G850V', g815:'PC-G815', '1360':'PC-1360', '1600':'PC-1600' };
 
-  // ── Line-length budget ────────────────────────────────────────────────────
-  // A BASIC line is:  "NNNNN GPRINT A$(I)\n"
-  // The DATA lines use GPRINT string format: each band = one string of W*2 hex chars.
-  // Each DATA string is stored in A$(band_index).
-  //
-  // GPRINT string format: each column byte → 2 hex chars (lo-nibble first, hi-nibble second)
-  // So one band string = W*2 characters long.
-  //
-  // DATA line budget (each DATA holds one quoted string):
-  //   "NNNNN DATA "XX…XX""
-  //   Overhead = 5 (linenum) + 1 (space) + 5 (DATA ) + 1 (") + 1 (") = 13 chars
-  //   Max string content = 80 - 13 = 67 chars = 33 columns per DATA segment
-  //
-  // If W*2 > 67, we split across multiple DATA entries and use GPRINT A$(i) per segment.
-  // Each segment stored in one A$(i) entry; GCURSOR is set only at the start of each band.
-
-  const MAX_LINE    = 80;
-  const DATA_OH     = 5 + 1 + 5 + 2; // "NNNNN DATA ""  = 13 chars overhead
-  const maxStrChars = MAX_LINE - DATA_OH;                  // 67 chars of string content
-  const maxColsSeg  = Math.floor(maxStrChars / 2);         // 33 columns per segment (each=2 chars)
-
-  // Build segments: each segment = array of band-index + column-range
-  // segments[i] = { band, colStart, colEnd, str }
-  const segments = [];
-  for (let b = 0; b < bands; b++) {
-    for (let ci = 0; ci < W; ci += maxColsSeg) {
-      const end = Math.min(ci + maxColsSeg, W);
-      let s = '';
-      for (let x = ci; x < end; x++) s += bToGS(data[b * W + x]);
-      segments.push({ band: b, colStart: ci, colEnd: end - 1, str: s });
-    }
-  }
-  const N = segments.length; // total number of A$() entries (= total GPRINT calls)
+  // ── DATA line packing ─────────────────────────────────────────────────────
+  // Each column value is stored as a quoted 2-char string: "XX"
+  // DATA "XX","XX","XX",…
+  // Entry cost: first entry = 4 chars ("XX"), subsequent = ,"XX" = 5 chars
+  // Line overhead: "NNNNN DATA " = 11 chars
+  // Max columns per DATA line: 1 + floor((80 - 11 - 4) / 5) = 1 + floor(65/5) = 1 + 13 = 14
+  const MAX_LINE   = 80;
+  const DATA_OH    = 11; // "NNNNN DATA "
+  const FIRST_COST = 4;  // "XX"
+  const NEXT_COST  = 5;  // ,"XX"
+  const maxColsPerDataLine = 1 + Math.floor((MAX_LINE - DATA_OH - FIRST_COST) / NEXT_COST); // 14
 
   // ── Line-number allocator ─────────────────────────────────────────────────
   let ln = lineStart;
   const S = lineStep;
-  const prog = []; // { ln, text }
+  const prog = [];
   const emit = t => { prog.push({ ln, text: t }); ln += S; };
 
-  // ── REM header ────────────────────────────────────────────────────────────
-  emit(`REM LCD ${W}X${H} ${devNames[devId]||devId} GCURSOR ${gcurX},${gcurY}`);
+  // ── Count program lines before DATA to compute RESTORE target ────────────
+  // Lines: REM, X=, DIM, FOR Y, FOR I, READ, NEXT I, GCURSOR, GPRINT, NEXT Y, END
+  // = 11 fixed lines (we'll also add a RESTORE line = 12 total before DATA)
+  const fixedLines = 12; // REM + X= + DIM + FOR Y + FOR I + READ + NEXT I + GCURSOR + GPRINT + NEXT Y + END + (nothing — RESTORE goes before FOR Y)
+  // Actually structure:
+  //   1  REM
+  //   2  X=
+  //   3  DIM
+  //   4  RESTORE <dataLn>
+  //   5  FOR Y
+  //   6    FOR I
+  //   7      READ
+  //   8    NEXT I
+  //   9    GCURSOR
+  //   10   GPRINT
+  //   11 NEXT Y
+  //   12 END
+  //   13+ DATA lines
+  const preDataLines = 12;
+  // DATA lines per band = ceil(W / maxColsPerDataLine)
+  const dataLinesPerBand = Math.ceil(W / maxColsPerDataLine);
+  const totalDataLines   = bands * dataLinesPerBand;
+  const firstDataLn      = lineStart + preDataLines * S;
 
-  // ── DIM the string array ──────────────────────────────────────────────────
-  emit(`DIM A$(${N - 1})`);
-
-  // ── FOR/READ loop to fill A$() ────────────────────────────────────────────
-  const forLn = ln;
-  emit(`FOR I=0 TO ${N - 1}`);
+  // ── Emit program ─────────────────────────────────────────────────────────
+  emit(`REM LCD ${W}X${H} ${devNames[devId]||devId}`);
+  emit(`X=${gcurX}`);
+  emit(`DIM A$(${W - 1})`);
+  emit(`RESTORE ${firstDataLn}`);
+  emit(`FOR Y=${gcurY} TO ${gcurY + (bands - 1) * 8} STEP 8`);
+  emit(`FOR I=0 TO ${W - 1}`);
   emit(`READ A$(I)`);
   emit(`NEXT I`);
-
-  // ── We need to know where DATA starts to emit RESTORE ────────────────────
-  // Count lines: 1 REM + 1 DIM + 3 FOR/READ/NEXT + 1 RESTORE +
-  //              display block + 1 END + N DATA lines
-  // Display block: for each band, 1 GCURSOR + ceil(W/maxColsSeg) GPRINT lines
-  // but segments already encodes this: for each segment we emit 1 GPRINT,
-  // and at the start of each new band we also emit 1 GCURSOR.
-  // Count display lines:
-  let displayLineCount = 0;
-  let lastBand = -1;
-  for (const seg of segments) {
-    if (seg.band !== lastBand) { displayLineCount++; lastBand = seg.band; } // GCURSOR
-    displayLineCount++; // GPRINT
-  }
-
-  const preDataLineCount = 1 + 1 + 3 + 1 + displayLineCount + 1; // REM+DIM+FOR/READ/NEXT+RESTORE+display+END
-  const firstDataLn = lineStart + preDataLineCount * S;
-
-  // ── RESTORE to point at DATA ──────────────────────────────────────────────
-  emit(`RESTORE ${firstDataLn}`);
-
-  // ── Display block: GCURSOR + GPRINT per segment ───────────────────────────
-  // We use a loop variable I to index into A$():
-  //   For each band: GCURSOR xpos, ypos+band
-  //   For each segment in that band: GPRINT A$(segIdx)
-  // Unrolled for clarity and robustness (no runtime array indexing needed):
-  let segIdx = 0;
-  lastBand = -1;
-  for (const seg of segments) {
-    if (seg.band !== lastBand) {
-      lastBand = seg.band;
-      emit(`GCURSOR ${gcurX + seg.colStart},${gcurY + seg.band}`);
-    }
-    emit(`GPRINT A$(${segIdx})`);
-    segIdx++;
-  }
-
+  emit(`GCURSOR (X,Y)`);
+  emit(`GPRINT A$`);
+  emit(`NEXT Y`);
   emit(`END`);
 
-  // ── DATA section — one entry per segment (quoted string) ─────────────────
-  for (const seg of segments) {
-    emit(`DATA "${seg.str}"`);
+  // ── DATA section — one row per band, split at maxColsPerDataLine ──────────
+  for (let b = 0; b < bands; b++) {
+    for (let ci = 0; ci < W; ci += maxColsPerDataLine) {
+      const end    = Math.min(ci + maxColsPerDataLine, W);
+      const values = [];
+      for (let x = ci; x < end; x++) values.push(`"${bToGS(data[b * W + x])}"`);
+      emit(`DATA ${values.join(',')}`);
+    }
   }
 
-  // ── Render as text ────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   const L = [];
-  L.push(`' ─────────────────────────────────────────────────────────`);
+  L.push(`' ──────────────────────────────────────────────────────`);
   L.push(`' SHARP S-BASIC GPRINT PROGRAM  —  ${devNames[devId]||devId}`);
-  L.push(`' Image    : ${W} × ${H} pixels  (${bands} band${bands>1?'s':''})`);
-  L.push(`' GCursor  : col=${gcurX}  band=${gcurY}  (top-left of image)`);
-  L.push(`' Segments : ${N} (max ${maxColsSeg} columns each)`);
-  L.push(`' Structure: DIM A$(${N-1}) → FOR/READ loop → GCURSOR/GPRINT → DATA`);
-  L.push(`' ─────────────────────────────────────────────────────────`);
+  L.push(`' Image   : ${W} × ${H} px  /  ${bands} band${bands!==1?'s':''} of 8 rows`);
+  L.push(`' GCursor : X=${gcurX}  Y=${gcurY}`);
+  L.push(`' DATA    : ${totalDataLines} lines  (${maxColsPerDataLine} cols/line max)`);
+  L.push(`' Line len: ≤${MAX_LINE} chars enforced`);
+  L.push(`' ──────────────────────────────────────────────────────`);
   L.push('');
   for (const { ln: num, text } of prog) L.push(`${num} ${text}`);
   return L;
