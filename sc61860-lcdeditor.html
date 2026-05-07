@@ -974,7 +974,7 @@ function buildBasic(data) {
   const yEnd   = gcurY + H - 1;  // bottom of last band = gcurY + (bands-1)*8 + 7
 
   // String array max length = W columns × 2 hex chars each
-  const strLen = W * 2;
+  const strLen = W;
 
   // Emit program
   emit(`REM LCD ${W}X${H} ${devNames[devId]||devId}`);
