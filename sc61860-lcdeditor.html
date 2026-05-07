@@ -328,9 +328,10 @@ footer em { color:var(--text); font-style:normal; }
 //   Bot  4 pixels ON → bits 4-7 set → 16+32+64+128 = 240 = 0xF0 ✓
 //
 // GPRINT "string" mode (per manual):
-//   Each byte is written as TWO hex chars.
-//   First  char = low  nibble (bits 0-3, TOP 4 dots)
-//   Second char = high nibble (bits 4-7, BOTTOM 4 dots)
+//   Each byte is written as TWO hex chars in normal order (high nibble first).
+//   First  char = high nibble (bits 4-7, BOTTOM 4 dots)
+//   Second char = low  nibble (bits 0-3, TOP    4 dots)
+//   Example: top 4 ON = 0x0F → "0F"  |  bottom 4 ON = 0xF0 → "F0"
 // ═══════════════════════════════════════════════════════════════════════════
 
 let W = 144, H = 48;
@@ -611,7 +612,7 @@ function fmtBasic(b) { return valMode==='hex' ? '&H'+b.toString(16).toUpperCase(
 function fmtAsm(b)   { return valMode==='hex' ? '$' +b.toString(16).toUpperCase().padStart(2,'0') : String(b); }
 function fmtRaw(b)   { return valMode==='hex' ? b.toString(16).toUpperCase().padStart(2,'0') : b.toString().padStart(3,' '); }
 // GPRINT string: lo-nibble (top 4 dots) first, then hi-nibble (bottom 4 dots)
-function bToGS(b) { return H16[b&0x0F] + H16[(b>>4)&0x0F]; }
+function bToGS(b) { return H16[(b>>4)&0x0F] + H16[b&0x0F]; }
 
 // ── OUTPUT BUILDERS ───────────────────────────────────────────────────────────
 function buildGprint(data) {
@@ -906,106 +907,92 @@ function saveFile() {
 
 // ── BASIC EXPORT ─────────────────────────────────────────────────────────────
 // Program structure:
-//   X = <gcurX>
-//   DIM A$(W-1)
-//   FOR Y = <gcurY> TO <gcurY + H - 8> STEP 8
-//     FOR I = 0 TO W-1
-//       READ A$(I)
-//     NEXT I
-//     GCURSOR (X,Y)
-//     GPRINT A$
-//   NEXT Y
-//   END
-//   DATA "XX…"   ← one DATA line per band (split to ≤80 chars if W is large)
+//   10 REM LCD WxH DEVICE
+//   20 X=<gcurX>:Y=<gcurY>
+//   30 DIM A$(0)*W          — one string var, length = W columns (each col = 2 hex chars → W*2 chars total? No — each T$ is 2 chars, W concatenations → length W*2... but the Sharp DIM A$(0)*N syntax sets max string length to N)
+//   40 RESTORE <dataLn>
+//   50 FOR Y=<gcurY+7> TO <gcurY+H-1> STEP 8   — starts at bottom of first band
+//   60   FOR I=0 TO W-1
+//   70     READ T$
+//   75     A$(0)=A$(0)+T$
+//   80   NEXT I
+//   90   GCURSOR (X,Y)
+//  100   GPRINT A$(0)
+//  105   A$(0)=""
+//  110 NEXT Y
+//  120 END
+//  130 DATA "XX","XX",…    — per-column 2-char hex strings, all bands sequentially
 //
-// GPRINT A$ with A$ as a string array: Sharp BASIC concatenates A$(0)…A$(W-1)
-// automatically when you write GPRINT A$ with A$ dimensioned as an array.
-// Each A$(I) holds the 2-char hex encoding of one column byte.
-// (lo-nibble first, hi-nibble second — standard Sharp GPRINT string format)
+// GCURSOR Y starts at gcurY+7 (bottom row of first band) because GPRINT
+// prints 8 rows upward from the cursor position.
+// Step 8 advances to the bottom of the next band.
 //
-// DATA lines: each value is a 2-char hex string, quoted, comma-separated.
-// Line budget: "NNNNN DATA "XX","XX",…"
-//   Each entry = 4 chars ("XX") + 1 comma = 5, last entry = 4.
-//   Overhead = 5 (linenum) + 1 (space) + 5 (DATA ) = 11.
-//   Max entries per line = floor((80 - 11 + 1) / 5) = 14 columns per DATA line.
-//   (The +1 accounts for the missing trailing comma on the last value.)
-//
-// If W > 14 the band's data spans multiple DATA lines — the READ loop reads
-// exactly W entries total, so the split is transparent to the program.
+// DIM A$(0)*N: N = W*2 characters (W columns × 2 hex chars each).
+// DATA packing: each entry = "XX" (4 chars), comma-separated.
+//   Line overhead = 5 (linenum) + 1 (space) + 5 (DATA ) = 11 chars.
+//   Max per line  = 1 + floor((80 - 11 - 4) / 5) = 14 entries.
 
 function buildBasic(data) {
-  // Device comes from the main toolbar selector — single source of truth
-  const devEl     = document.getElementById('device-sel');
-  const devId     = devEl ? devEl.value : 'g850';
-  const gcurXEl   = document.getElementById('basic-gcursor-x');
-  const gcurYEl   = document.getElementById('basic-gcursor-y');
-  const lsEl      = document.getElementById('basic-line-start');
-  const lstepEl   = document.getElementById('basic-line-step');
-  const gcurX     = gcurXEl   ? (parseInt(gcurXEl.value)   || 0) : 0;
-  const gcurY     = gcurYEl   ? (parseInt(gcurYEl.value)   || 0) : 0;
+  // Device from main toolbar selector
+  const devEl    = document.getElementById('device-sel');
+  const devId    = devEl ? devEl.value : 'g850';
+  const gcurXEl  = document.getElementById('basic-gcursor-x');
+  const gcurYEl  = document.getElementById('basic-gcursor-y');
+  const lsEl     = document.getElementById('basic-line-start');
+  const lstepEl  = document.getElementById('basic-line-step');
+  const gcurX    = gcurXEl  ? (parseInt(gcurXEl.value)  || 0) : 0;
+  const gcurY    = gcurYEl  ? (parseInt(gcurYEl.value)  || 0) : 0;
   const lineStart = Math.max(1, lsEl    ? (parseInt(lsEl.value)    || 10) : 10);
   const lineStep  = Math.max(1, lstepEl ? (parseInt(lstepEl.value) || 10) : 10);
 
-  const bands   = H / 8;
+  const bands    = H / 8;
   const devNames = { g850:'PC-G850V', g815:'PC-G815', '1360':'PC-1360', '1600':'PC-1600' };
 
-  // ── DATA line packing ─────────────────────────────────────────────────────
-  // Each column value is stored as a quoted 2-char string: "XX"
-  // DATA "XX","XX","XX",…
-  // Entry cost: first entry = 4 chars ("XX"), subsequent = ,"XX" = 5 chars
-  // Line overhead: "NNNNN DATA " = 11 chars
-  // Max columns per DATA line: 1 + floor((80 - 11 - 4) / 5) = 1 + floor(65/5) = 1 + 13 = 14
-  const MAX_LINE   = 80;
-  const DATA_OH    = 11; // "NNNNN DATA "
-  const FIRST_COST = 4;  // "XX"
-  const NEXT_COST  = 5;  // ,"XX"
+  // DATA line packing: entries "XX", comma-separated, max 80 chars per line
+  const MAX_LINE          = 80;
+  const DATA_OH           = 11; // "NNNNN DATA "
+  const FIRST_COST        = 4;  // "XX"
+  const NEXT_COST         = 5;  // ,"XX"
   const maxColsPerDataLine = 1 + Math.floor((MAX_LINE - DATA_OH - FIRST_COST) / NEXT_COST); // 14
 
-  // ── Line-number allocator ─────────────────────────────────────────────────
+  // Line-number allocator
   let ln = lineStart;
   const S = lineStep;
   const prog = [];
   const emit = t => { prog.push({ ln, text: t }); ln += S; };
 
-  // ── Count program lines before DATA to compute RESTORE target ────────────
-  // Lines: REM, X=, DIM, FOR Y, FOR I, READ, NEXT I, GCURSOR, GPRINT, NEXT Y, END
-  // = 11 fixed lines (we'll also add a RESTORE line = 12 total before DATA)
-  const fixedLines = 12; // REM + X= + DIM + FOR Y + FOR I + READ + NEXT I + GCURSOR + GPRINT + NEXT Y + END + (nothing — RESTORE goes before FOR Y)
-  // Actually structure:
-  //   1  REM
-  //   2  X=
-  //   3  DIM
-  //   4  RESTORE <dataLn>
-  //   5  FOR Y
-  //   6    FOR I
-  //   7      READ
-  //   8    NEXT I
-  //   9    GCURSOR
-  //   10   GPRINT
-  //   11 NEXT Y
-  //   12 END
-  //   13+ DATA lines
-  const preDataLines = 12;
-  // DATA lines per band = ceil(W / maxColsPerDataLine)
+  // Count fixed lines before DATA:
+  //  1 REM, 2 X=:Y=, 3 DIM, 4 RESTORE, 5 FOR Y, 6 FOR I, 7 READ T$,
+  //  8 A$(0)=…, 9 NEXT I, 10 GCURSOR, 11 GPRINT, 12 A$(0)="", 13 NEXT Y, 14 END
+  const preDataLines   = 14;
+  const firstDataLn    = lineStart + preDataLines * S;
   const dataLinesPerBand = Math.ceil(W / maxColsPerDataLine);
   const totalDataLines   = bands * dataLinesPerBand;
-  const firstDataLn      = lineStart + preDataLines * S;
 
-  // ── Emit program ─────────────────────────────────────────────────────────
+  // Y cursor: starts at bottom of first band (gcurY + 7), steps by 8
+  const yStart = gcurY + 7;
+  const yEnd   = gcurY + H - 1;  // bottom of last band = gcurY + (bands-1)*8 + 7
+
+  // String array max length = W columns × 2 hex chars each
+  const strLen = W * 2;
+
+  // Emit program
   emit(`REM LCD ${W}X${H} ${devNames[devId]||devId}`);
-  emit(`X=${gcurX}`);
-  emit(`DIM A$(${W - 1})`);
+  emit(`X=${gcurX}:Y=${gcurY}`);
+  emit(`DIM A$(0)*${strLen}`);
   emit(`RESTORE ${firstDataLn}`);
-  emit(`FOR Y=${gcurY} TO ${gcurY + (bands - 1) * 8} STEP 8`);
+  emit(`FOR Y=${yStart} TO ${yEnd} STEP 8`);
   emit(`FOR I=0 TO ${W - 1}`);
-  emit(`READ A$(I)`);
+  emit(`READ T$`);
+  emit(`A$(0)=A$(0)+T$`);
   emit(`NEXT I`);
   emit(`GCURSOR (X,Y)`);
-  emit(`GPRINT A$`);
+  emit(`GPRINT A$(0)`);
+  emit(`A$(0)=""`);
   emit(`NEXT Y`);
   emit(`END`);
 
-  // ── DATA section — one row per band, split at maxColsPerDataLine ──────────
+  // DATA section
   for (let b = 0; b < bands; b++) {
     for (let ci = 0; ci < W; ci += maxColsPerDataLine) {
       const end    = Math.min(ci + maxColsPerDataLine, W);
@@ -1015,14 +1002,13 @@ function buildBasic(data) {
     }
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Render
   const L = [];
   L.push(`' ──────────────────────────────────────────────────────`);
   L.push(`' SHARP S-BASIC GPRINT PROGRAM  —  ${devNames[devId]||devId}`);
   L.push(`' Image   : ${W} × ${H} px  /  ${bands} band${bands!==1?'s':''} of 8 rows`);
-  L.push(`' GCursor : X=${gcurX}  Y=${gcurY}`);
-  L.push(`' DATA    : ${totalDataLines} lines  (${maxColsPerDataLine} cols/line max)`);
-  L.push(`' Line len: ≤${MAX_LINE} chars enforced`);
+  L.push(`' GCursor : X=${gcurX}  Y starts at ${yStart} (bottom of band 0)`);
+  L.push(`' DATA    : ${totalDataLines} lines  (${maxColsPerDataLine} cols/line max, ≤${MAX_LINE} chars)`);
   L.push(`' ──────────────────────────────────────────────────────`);
   L.push('');
   for (const { ln: num, text } of prog) L.push(`${num} ${text}`);
