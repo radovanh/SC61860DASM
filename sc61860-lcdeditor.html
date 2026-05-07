@@ -282,13 +282,6 @@ footer em { color:var(--text); font-style:normal; }
       <div class="out-tab"        id="tab-bitmap"  onclick="switchTab('bitmap')">BITMAP DUMP</div>
       <div class="out-tab"        id="tab-basic"   onclick="switchTab('basic')">BASIC EXPORT</div>
       <div id="basic-export-controls" style="display:none;align-items:center;gap:6px;padding:0 10px;border-left:1px solid var(--border);flex-shrink:0">
-        <span style="font-size:10px;color:var(--muted);letter-spacing:1px;white-space:nowrap">DEVICE</span>
-        <select id="basic-device-sel" onchange="updateOutput()" style="font-size:10px;height:22px;padding:2px 5px">
-          <option value="g850">PC-G850V</option>
-          <option value="g815">PC-G815</option>
-          <option value="1360">PC-1360</option>
-          <option value="1600">PC-1600</option>
-        </select>
         <span style="font-size:10px;color:var(--muted);letter-spacing:1px;white-space:nowrap">GCURSOR X</span>
         <input type="number" id="basic-gcursor-x" value="0" min="0" max="383" oninput="updateOutput()"
           style="width:50px;font-size:11px;height:22px;padding:2px 5px">
@@ -941,7 +934,8 @@ function saveFile() {
 // exactly W entries total, so the split is transparent to the program.
 
 function buildBasic(data) {
-  const devEl     = document.getElementById('basic-device-sel');
+  // Device comes from the main toolbar selector — single source of truth
+  const devEl     = document.getElementById('device-sel');
   const devId     = devEl ? devEl.value : 'g850';
   const gcurXEl   = document.getElementById('basic-gcursor-x');
   const gcurYEl   = document.getElementById('basic-gcursor-y');
