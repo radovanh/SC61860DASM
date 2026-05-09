@@ -199,7 +199,6 @@
     footer { padding: 7px 14px; gap: 12px; }
   }
 </style>
-<link rel="icon" type="image/x-icon" href="favicon.ico">
 </head>
 <body>
 
@@ -500,25 +499,20 @@ const ENTRIES = [
 
   // ── PC-1403 INTERNAL ROM UTILITY STUBS ────────────────────────────────────
   { section: 'PC-1403 / PC-1460 — INTERNAL ROM UTILITY STUBS' },
+  { addr:0x04B4, name:'SCREEN_OFF', cat:'DISPLAY', devices:['1403'],
+    desc:'Undocumented internal ROM routine — turns the LCD off. ' +
+         'Called from BASIC as CALL 1204. ' +
+         'Disables display output without clearing VRAM contents.',
+    src:'Community · CALL 1204 verified on PC-1403 / PC-1403H' },
+  { addr:0x04B8, name:'SCREEN_ON', cat:'DISPLAY', devices:['1403'],
+    desc:'Undocumented internal ROM routine — turns the LCD on and enables graphics mode. ' +
+         'Called from BASIC as CALL 1208. ' +
+         'Must be called after SCREEN_OFF ($04B4) or after a mode switch to restore the display.',
+    src:'Community · CALL 1208 verified on PC-1403 / PC-1403H' },
   { addr:0x159E, name:'EXG_iRAM_04_0C', cat:'ROM', devices:['1403'],
     desc:'Exchange internal RAM byte at address $04 (REG XL) with byte at $0C (REG YL). ' +
          'Opcode sequence: LP $04 · LIQ $0C · EXB · RTN. ' +
          '4-byte utility stub; called by arithmetic and BCD routines that need to swap XL↔YL in the SC61860 internal register file.',
-    src:'PC-1403 ROM disassembly — verified' },
-  { addr:0x1494, name:'GET_KEY', cat:'IO', devices:['1403'],
-    desc:'Wait for a keystroke and return with the key code in A. Blocking — does not return until a key is pressed. ' +
-         'Turns LCD on, then loops polling both the IA-port keyboard scanner (0E68) and the special-key scanner (0F2A). ' +
-         'On each half-second tick the display state may be refreshed. Returns key code in A.',
-    src:'PC-1403 ROM disassembly — verified' },
-  { addr:0x03CE, name:'A_TO_Y', cat:'ROM', devices:['1403'],
-    desc:'Copy the 2-byte value at internal RAM address $02 (register pair AB) into the Y register (internal RAM $06–$07), then decrement Y (DY). ' +
-         'Opcode sequence: LP $06 · LIQ $02 · MVB · DY · RTN. ' +
-         '5-byte utility stub equivalent to "Y ← AB". Called by routines that need to transfer the AB pair into the Y pointer.',
-    src:'PC-1403 ROM disassembly — verified' },
-  { addr:0x03C4, name:'A_TO_X', cat:'ROM', devices:['1403'],
-    desc:'Copy the 2-byte value at internal RAM address $02 (register pair AB) into the X register (internal RAM $04–$05), then decrement X (DX). ' +
-         'Opcode sequence: LP $04 · LIQ $02 · MVB · DX · RTN. ' +
-         '5-byte utility stub equivalent to "X ← AB". Called by routines that need to transfer the AB pair into the X pointer.',
     src:'PC-1403 ROM disassembly — verified' },
 
   // ── PC-1350 SYSTEM RAM ────────────────────────────────────────────────────
