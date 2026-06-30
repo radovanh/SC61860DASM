@@ -294,6 +294,25 @@
       <option value="256">256</option>
     </select>
   </div>
+  <div style="width:12px"></div>
+  <div class="fieldset">
+    <label for="max-poke">MAX POKE BYTES</label>
+    <select id="max-poke" class="small-input">
+      <option value="8">8</option>
+      <option value="12" selected>12</option>
+      <option value="16">16</option>
+      <option value="32">32</option>
+    </select>
+  </div>
+
+  <div style="width:12px"></div>
+  <div class="fieldset">
+    <label for="out-style">OUTPUT STYLE</label>
+    <select id="out-style" class="small-input">
+      <option value="poke">POKE</option>
+      <option value="data">DATA + READ loader</option>
+    </select>
+  </div>
 
   <div class="sep"></div>
   <button class="btn btn-green" id="dl-bas-btn" onclick="downloadBas()" disabled>↓ BASIC TXT</button>
@@ -477,6 +496,9 @@ function getBlocks(addrs) {
 }
 
 function buildBasic(memory) {
+  const outStyleEl = document.getElementById('out-style');
+  const outStyle = outStyleEl ? outStyleEl.value : 'poke';
+  if (outStyle === 'data') return buildBasicData(memory);
   const addrs = sortedAddrs(memory);
   if (!addrs.length) return '';
   const lines = [];
@@ -485,6 +507,8 @@ function buildBasic(memory) {
   lines.push(`10 REM GENERATED FROM ${lastFilename}`);
   const maxLenEl = document.getElementById('line-length');
   const maxLen = maxLenEl ? parseInt(maxLenEl.value, 10) : 128;
+  const maxBytesEl = document.getElementById('max-poke');
+  const maxBytes = maxBytesEl ? parseInt(maxBytesEl.value, 10) : 12;
 
   for (const block of blocks) {
     let addr = block[0];
@@ -503,9 +527,9 @@ function buildBasic(memory) {
       // try adding value and check if resulting line fits
       const candidate = values.concat([value]);
       const testLine = formatPoke(lineNum, addr, candidate);
-      if (testLine.length > maxLen) {
+      if (candidate.length > maxBytes || testLine.length > maxLen) {
         if (values.length === 0) {
-          // single value exceeds maxLen, still emit it to avoid infinite loop
+          // single value exceeds limits, still emit it to avoid infinite loop
           lines.push(formatPoke(lineNum, addr, candidate));
           lineNum += 10;
           addr = current + 1;
@@ -535,6 +559,53 @@ function formatPoke(lineNum, addr, values) {
   const addrStr = prefix === '&H' ? `&H${hex4(addr)}` : `&${hex4(addr)}`;
   const hexValues = values.map(v => (prefix === '&H' ? `&H${hex2(v)}` : `&${hex2(v)}`));
   return `${lineNum} POKE ${addrStr},${hexValues.join(',')}`;
+}
+
+function buildBasicData(memory) {
+  const addrs = sortedAddrs(memory);
+  if (!addrs.length) return '';
+  const blocks = getBlocks(addrs);
+  const lines = [];
+  let lineNum = 100;
+  lines.push(`${lineNum} REM GENERATED FROM ${lastFilename}`);
+  lineNum += 10;
+
+  // For each block emit a small loader chunk that reads its bytes and pokes them
+  const prefixEl = document.getElementById('hex-prefix');
+  const prefix = prefixEl ? prefixEl.value : '&';
+  const maxDataPerLineEl = document.getElementById('max-poke');
+  const maxDataPerLine = maxDataPerLineEl ? parseInt(maxDataPerLineEl.value, 10) : 12;
+
+  // We'll emit loader code first, then DATA lines after
+  let totalBytes = 0;
+  for (const block of blocks) totalBytes += block.length;
+
+  // loader header: set up a READ loop per block
+  for (const block of blocks) {
+    const addr = block[0];
+    lines.push(`${lineNum} LET A = ${prefix === '&H' ? `&H${hex4(addr)}` : `&${hex4(addr)}`}`); lineNum += 10;
+    lines.push(`${lineNum} FOR I = 1 TO ${block.length}`); lineNum += 10;
+    lines.push(`${lineNum} READ V`); lineNum += 10;
+    lines.push(`${lineNum} POKE A,V`); lineNum += 10;
+    lines.push(`${lineNum} A = A + 1`); lineNum += 10;
+    lines.push(`${lineNum} NEXT`); lineNum += 10;
+  }
+
+  // Emit DATA lines: concatenate all block bytes in order
+  const dataVals = [];
+  for (const block of blocks) {
+    for (const a of block) dataVals.push(memory.get(a));
+  }
+
+  // Break DATA values into lines with maxDataPerLine values per DATA statement
+  for (let i = 0; i < dataVals.length; i += maxDataPerLine) {
+    const slice = dataVals.slice(i, i + maxDataPerLine);
+    const dataLine = slice.map(v => v.toString(10)).join(',');
+    lines.push(`${lineNum} DATA ${dataLine}`);
+    lineNum += 10;
+  }
+
+  return lines.join('\n');
 }
 
 function renderOutput(memory) {
@@ -657,8 +728,58 @@ function convert() {
 function downloadBas() {
   if (!lastMemory) return;
   const text = buildBasic(lastMemory);
-  const blob = new Blob([text], { type: 'text/plain' });
-  triggerDownload(blob, lastFilename + '.bas');
+  splitAndDownloadBas(text, lastFilename);
+}
+
+// Split BASIC text into parts if too large and download each part.
+function splitAndDownloadBas(text, baseName) {
+  const MAX_PART_CHARS = 16000; // approx safe threshold; tuneable
+  const lines = text.split('\n');
+  if (text.length <= MAX_PART_CHARS) {
+    const blob = new Blob([text], { type: 'text/plain' });
+    triggerDownload(blob, baseName + '.bas');
+    return;
+  }
+
+  // accumulate parts, splitting at line boundaries
+  const parts = [];
+  let cur = [];
+  let curLen = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i] + '\n';
+    if (curLen + ln.length > MAX_PART_CHARS && cur.length > 0) {
+      parts.push(cur.slice());
+      cur = [];
+      curLen = 0;
+    }
+    cur.push(lines[i]);
+    curLen += ln.length;
+  }
+  if (cur.length) parts.push(cur.slice());
+
+  // Add CHAIN lines at end of each part except last
+  for (let p = 0; p < parts.length; p++) {
+    const part = parts[p];
+    if (p < parts.length - 1) {
+      // determine last numeric line in this part
+      let lastNum = 0;
+      for (let i = part.length - 1; i >= 0; i--) {
+        const m = part[i].match(/^\s*(\d+)\b/);
+        if (m) { lastNum = parseInt(m[1], 10); break; }
+      }
+      const chainNum = (lastNum || 10) + 10;
+      const nextName = `${baseName}_${p+2}.bas`;
+      part.push(`${chainNum} CHAIN "${nextName.toUpperCase()}"`);
+    }
+  }
+
+  // download each part
+  for (let p = 0; p < parts.length; p++) {
+    const fname = parts.length === 1 ? `${baseName}.bas` : `${baseName}_${p+1}.bas`;
+    const content = parts[p].join('\n') + '\n';
+    const blob = new Blob([content], { type: 'text/plain' });
+    triggerDownload(blob, fname);
+  }
 }
 
 function triggerDownload(blob, name) {
@@ -818,6 +939,10 @@ window.addEventListener('load', () => {
   }
   const prefixEl = document.getElementById('hex-prefix');
   if (prefixEl) prefixEl.addEventListener('change', convert);
+  const maxPokeEl = document.getElementById('max-poke');
+  if (maxPokeEl) maxPokeEl.addEventListener('change', convert);
+  const outStyleEl = document.getElementById('out-style');
+  if (outStyleEl) outStyleEl.addEventListener('change', convert);
   const lineLenEl = document.getElementById('line-length');
   if (lineLenEl) lineLenEl.addEventListener('change', convert);
 });
