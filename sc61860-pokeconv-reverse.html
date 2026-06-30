@@ -567,11 +567,24 @@ function buildBasic(memory) {
   return lines.join('\n');
 }
 
-function formatPoke(lineNum, addr, values) {
+function getHexPrefix() {
   const prefixEl = document.getElementById('hex-prefix');
-  const prefix = prefixEl ? prefixEl.value : '&';
-  const addrStr = prefix === '&H' ? `&H${hex4(addr)}` : `&${hex4(addr)}`;
-  const hexValues = values.map(v => (prefix === '&H' ? `&H${hex2(v)}` : `&${hex2(v)}`));
+  return prefixEl ? prefixEl.value : '&';
+}
+
+function formatHexAddr(addr) {
+  const prefix = getHexPrefix();
+  return prefix === '&H' ? `&H${hex4(addr)}` : `&${hex4(addr)}`;
+}
+
+function formatHexValue(v) {
+  const prefix = getHexPrefix();
+  return prefix === '&H' ? `&H${hex2(v)}` : `&${hex2(v)}`;
+}
+
+function formatPoke(lineNum, addr, values) {
+  const addrStr = formatHexAddr(addr);
+  const hexValues = values.map(v => formatHexValue(v));
   return `${lineNum} POKE ${addrStr},${hexValues.join(',')}`;
 }
 
@@ -585,10 +598,13 @@ function buildBasicData(memory) {
   lineNum += 10;
 
   // For each block emit a small loader chunk that reads its bytes and pokes them
-  const prefixEl = document.getElementById('hex-prefix');
-  const prefix = prefixEl ? prefixEl.value : '&';
   const maxDataPerLineEl = document.getElementById('max-poke');
   const maxDataPerLine = maxDataPerLineEl ? parseInt(maxDataPerLineEl.value, 10) : 12;
+
+  const addrFormatter = (addr) => {
+    const prefix = getHexPrefix();
+    return prefix === '&H' ? `&H${hex4(addr)}` : `&${hex4(addr)}`;
+  };
 
   // We'll emit loader code first, then DATA lines after
   let totalBytes = 0;
@@ -597,7 +613,7 @@ function buildBasicData(memory) {
   // loader header: set up a READ loop per block
   for (const block of blocks) {
     const addr = block[0];
-    lines.push(`${lineNum} LET A = ${prefix === '&H' ? `&H${hex4(addr)}` : `&${hex4(addr)}`}`); lineNum += 10;
+    lines.push(`${lineNum} LET A = ${addrFormatter(addr)}`); lineNum += 10;
     lines.push(`${lineNum} FOR I = 1 TO ${block.length}`); lineNum += 10;
     lines.push(`${lineNum} READ V`); lineNum += 10;
     lines.push(`${lineNum} POKE A,V`); lineNum += 10;
