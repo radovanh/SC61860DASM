@@ -254,7 +254,7 @@
     <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:700;color:var(--accent2);letter-spacing:2px">POKE CONVERTER</div>
     <div class="tagline">BIN / INTEL HEX → BASIC POKE</div>
   </div>
-  <a class="nav-back" href="sc61860-pokeconv.html">↔ MAIN MODE</a>
+  <a class="nav-back" href="index.html">← INDEX</a>
   <div class="badge">
     <em>SHARP PC-12xx/13xx/14xx</em><br>
     Generate POKE &amp;ADDR, &amp;VAL…
@@ -262,9 +262,10 @@
 </header>
 
 <div class="controls">
-  <button class="btn btn-orange" onclick="convert()">▶ CONVERT</button>
-  <button class="btn btn-secondary" onclick="loadFile()">↑ LOAD FILE</button>
-  <button class="btn btn-secondary" onclick="clearInput()">✕ CLEAR</button>
+  <button type="button" class="btn btn-orange" onclick="convert()">▶ CONVERT</button>
+  <button type="button" class="btn btn-secondary" onclick="loadFile()">↑ LOAD FILE</button>
+  <button type="button" class="btn btn-secondary" onclick="switchToMainMode()">BAS->HEX</button>
+  <button type="button" class="btn btn-secondary" onclick="clearInput()">✕ CLEAR</button>
   <input type="file" id="file-input" accept=".bin,.hex,.HEX,.BIN,.txt" style="display:none" onchange="handleFile(event)">
 
   <div class="sep"></div>
@@ -574,7 +575,9 @@ function convert() {
     document.getElementById('format-hint').textContent = `Loaded ${lastMemory.size} bytes`;
     lastFilename = lastFilename.replace(/\.[^.]+$/, '');
   } else {
-    outEl.appendChild(document.getElementById('empty-state'));
+    const empty = document.getElementById('empty-state');
+    empty.style.display = '';
+    outEl.appendChild(empty);
     document.getElementById('format-hint').textContent = 'Paste Intel HEX or load BIN / HEX file.';
   }
 }
@@ -594,10 +597,16 @@ function triggerDownload(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function loadFile() { document.getElementById('file-input').click(); }
+function loadFile() {
+  const fileInput = document.getElementById('file-input');
+  if (fileInput) fileInput.click();
+}
+
+function switchToMainMode() { window.location.href = 'sc61860-pokeconv.html'; }
 
 function handleFile(e) {
-  const file = e.target.files[0];
+  const target = e.target || e.currentTarget;
+  const file = target && target.files && target.files[0];
   if (!file) return;
   lastFilename = file.name;
   const ext = file.name.split('.').pop().toLowerCase();
@@ -621,7 +630,10 @@ function handleFile(e) {
       document.getElementById('dl-bas-btn').disabled = true;
       const outEl = document.getElementById('output-area');
       outEl.innerHTML = '';
-      outEl.appendChild(document.getElementById('empty-state'));
+      const empty = document.getElementById('empty-state');
+      empty.style.display = '';
+      outEl.appendChild(empty);
+      convert();
     };
     reader.readAsArrayBuffer(file);
   }
@@ -686,6 +698,10 @@ document.getElementById('source-input').addEventListener('input', () => {
 
 window.addEventListener('load', () => {
   initSplitter();
+  const fileInput = document.getElementById('file-input');
+  if (fileInput) {
+    fileInput.addEventListener('change', handleFile);
+  }
 });
 </script>
 </body>
