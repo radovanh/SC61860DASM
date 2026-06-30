@@ -606,6 +606,8 @@ function convert() {
   if (enabled) {
     // render and ensure BASIC is shown
     renderOutput(lastMemory);
+    const empty = document.getElementById('empty-state');
+    if (empty) empty.style.display = 'none';
     document.getElementById('format-hint').textContent = `Loaded ${lastMemory.size} bytes`;
     lastFilename = lastFilename.replace(/\.[^.]+$/, '');
     // append explicit BASIC code block so it's always visible
@@ -615,6 +617,8 @@ function convert() {
     basicBlock.style.marginTop = '12px';
     basicBlock.textContent = buildBasic(lastMemory);
     outArea.appendChild(basicBlock);
+    // ensure scroll shows the new content
+    outArea.scrollTop = 0;
   } else {
     const empty = document.getElementById('empty-state');
     empty.style.display = '';
@@ -667,6 +671,22 @@ function handleFile(e) {
       document.getElementById('format-hint').textContent = `Loaded ${file.name} (${text.length} chars)`;
       lastMemory = null;
       document.getElementById('dl-bas-btn').disabled = true;
+      // try to auto-detect start address from Intel HEX records
+      try {
+        const parsed = parseIntelHex(text);
+        if (parsed && parsed.memory && parsed.memory.size) {
+          const addrs = sortedAddrs(parsed.memory);
+          if (addrs && addrs.length) {
+            const min = addrs[0];
+            const prefixEl = document.getElementById('hex-prefix');
+            const prefix = prefixEl ? prefixEl.value : '&';
+            const val = prefix === '&H' ? `&H${hex4(min)}` : `&${hex4(min)}`;
+            document.getElementById('start-addr').value = val;
+          }
+        }
+      } catch (e) {
+        console.warn('auto-detect start addr failed', e);
+      }
       convert();
     };
     reader.readAsText(file, 'latin1');
