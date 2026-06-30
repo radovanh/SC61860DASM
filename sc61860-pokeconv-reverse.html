@@ -314,6 +314,20 @@
     </select>
   </div>
 
+  <div style="width:12px"></div>
+  <div class="fieldset">
+    <label for="split-enabled">SPLIT OUTPUT</label>
+    <select id="split-enabled" class="small-input">
+      <option value="0">No</option>
+      <option value="1">Yes</option>
+    </select>
+  </div>
+  <div style="width:12px"></div>
+  <div class="fieldset">
+    <label for="split-threshold">SPLIT AFTER</label>
+    <input id="split-threshold" class="small-input" type="number" value="16000" min="2000" step="1000" title="Split output after this many characters">
+  </div>
+
   <div class="sep"></div>
   <button class="btn btn-green" id="dl-bas-btn" onclick="downloadBas()" disabled>↓ BASIC TXT</button>
   <button class="btn btn-green" onclick="switchToMainMode()">BAS->HEX</button>
@@ -707,15 +721,8 @@ function convert() {
     if (empty) empty.style.display = 'none';
     document.getElementById('format-hint').textContent = `Loaded ${lastMemory.size} bytes`;
     lastFilename = lastFilename.replace(/\.[^.]+$/, '');
-    // append explicit BASIC code block so it's always visible
-    const outArea = document.getElementById('output-area');
-    const basicBlock = document.createElement('div');
-    basicBlock.className = 'out-code';
-    basicBlock.style.marginTop = '12px';
-    basicBlock.textContent = buildBasic(lastMemory);
-    outArea.appendChild(basicBlock);
     // ensure scroll shows the new content
-    outArea.scrollTop = 0;
+    outEl.scrollTop = 0;
   } else {
     if (empty) {
       empty.style.display = '';
@@ -725,21 +732,32 @@ function convert() {
   }
 }
 
+function getSplitConfig() {
+  const enabled = document.getElementById('split-enabled');
+  const threshold = document.getElementById('split-threshold');
+  return {
+    enabled: enabled ? enabled.value === '1' : false,
+    threshold: threshold ? Math.max(0, parseInt(threshold.value, 10)) : 0
+  };
+}
+
 function downloadBas() {
   if (!lastMemory) return;
   const text = buildBasic(lastMemory);
-  splitAndDownloadBas(text, lastFilename);
+  const splitConfig = getSplitConfig();
+  splitAndDownloadBas(text, lastFilename, splitConfig);
 }
 
 // Split BASIC text into parts if too large and download each part.
-function splitAndDownloadBas(text, baseName) {
-  const MAX_PART_CHARS = 16000; // approx safe threshold; tuneable
-  const lines = text.split('\n');
-  if (text.length <= MAX_PART_CHARS) {
+function splitAndDownloadBas(text, baseName, config) {
+  const enabled = config && config.enabled;
+  const threshold = config && config.threshold ? config.threshold : 16000;
+  if (!enabled || text.length <= threshold) {
     const blob = new Blob([text], { type: 'text/plain' });
     triggerDownload(blob, baseName + '.bas');
     return;
   }
+  const lines = text.split('\n');
 
   // accumulate parts, splitting at line boundaries
   const parts = [];
@@ -747,7 +765,7 @@ function splitAndDownloadBas(text, baseName) {
   let curLen = 0;
   for (let i = 0; i < lines.length; i++) {
     const ln = lines[i] + '\n';
-    if (curLen + ln.length > MAX_PART_CHARS && cur.length > 0) {
+    if (curLen + ln.length > threshold && cur.length > 0) {
       parts.push(cur.slice());
       cur = [];
       curLen = 0;
@@ -943,6 +961,10 @@ window.addEventListener('load', () => {
   if (maxPokeEl) maxPokeEl.addEventListener('change', convert);
   const outStyleEl = document.getElementById('out-style');
   if (outStyleEl) outStyleEl.addEventListener('change', convert);
+  const splitEnabledEl = document.getElementById('split-enabled');
+  if (splitEnabledEl) splitEnabledEl.addEventListener('change', () => { document.getElementById('dl-bas-btn').disabled = !lastMemory; });
+  const splitThresholdEl = document.getElementById('split-threshold');
+  if (splitThresholdEl) splitThresholdEl.addEventListener('input', () => { document.getElementById('dl-bas-btn').disabled = !lastMemory; });
   const lineLenEl = document.getElementById('line-length');
   if (lineLenEl) lineLenEl.addEventListener('change', convert);
 });
