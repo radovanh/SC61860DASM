@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC61860 POKE Converter — BIN/HEX → BASIC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0a0c10;
+    --panel:    #0f1319;
+    --border:   #1e2d3d;
+    --accent:   #00e5ff;
+    --accent2:  #ff6b35;
+    --green:    #39ff14;
+    --purple:   #c792ea;
+    --dim:      #3a4a5a;
+    --text:     #c8d8e8;
+    --muted:    #5a7a8a;
+    --addr:     #ff6b35;
+    --hex:      #00e5ff;
+    --ascii:    #c8d8e8;
+    --error:    #ff4444;
+    --glow:     0 0 8px rgba(0,229,255,0.4);
+    --glow2:    0 0 8px rgba(57,255,20,0.3);
+    --glow3:    0 0 8px rgba(199,146,234,0.4);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.10) 2px, rgba(0,0,0,0.10) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  header {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: linear-gradient(180deg, rgba(0,229,255,0.04) 0%, transparent 100%);
+    position: relative;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+    opacity: 0.45;
+  }
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900; font-size: 20px;
+    color: var(--accent); text-shadow: var(--glow);
+    letter-spacing: 2px; white-space: nowrap; text-decoration: none;
+  }
+  .logo span { color: var(--accent2); text-shadow: 0 0 8px rgba(255,107,53,0.5); }
+  .tagline { color: var(--muted); font-size: 11px; letter-spacing: 1px; }
+  .nav-back {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    color: var(--muted); text-decoration: none; letter-spacing: 1px;
+    border: 1px solid var(--dim); padding: 5px 12px; border-radius: 2px;
+    transition: all 0.2s;
+  }
+  .nav-back:hover { color: var(--accent); border-color: var(--accent); }
+  .badge {
+    margin-left: auto; font-size: 11px; color: var(--muted);
+    text-align: right; line-height: 1.6;
+  }
+  .badge em { color: var(--accent2); font-style: normal; }
+
+  .controls {
+    flex-shrink: 0;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 9px 28px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    row-gap: 7px;
+  }
+
+  label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+  .btn {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; padding: 0 15px; border: 1px solid currentColor;
+    background: transparent; cursor: pointer; border-radius: 2px;
+    transition: all 0.2s; text-transform: uppercase; white-space: nowrap;
+    height: 28px; display: flex; align-items: center; gap: 6px;
+  }
+  .btn-primary   { color: var(--accent); border-color: var(--accent); }
+  .btn-primary:hover  { background: rgba(0,229,255,0.1); box-shadow: var(--glow); }
+  .btn-orange    { color: var(--accent2); border-color: var(--accent2); }
+  .btn-orange:hover   { background: rgba(255,107,53,0.1); box-shadow: 0 0 8px rgba(255,107,53,0.4); }
+  .btn-green     { color: var(--green); border-color: var(--green); }
+  .btn-green:hover    { background: rgba(57,255,20,0.08); box-shadow: var(--glow2); }
+  .btn-secondary { color: var(--muted); border-color: var(--dim); }
+  .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+  .btn-danger    { color: var(--error); border-color: var(--error); }
+  .btn-danger:hover   { background: rgba(255,68,68,0.08); }
+
+  .sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+
+  .fieldset {
+    display: grid; gap: 6px;
+  }
+
+  .small-input {
+    width: 96px; padding: 7px 10px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; border-radius: 2px; outline: none;
+  }
+
+  .hint {
+    font-size: 10px; color: var(--muted); letter-spacing: 1px;
+  }
+
+  .workspace {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .pane {
+    display: flex;
+    flex-direction: column;
+    min-width: 120px;
+    min-height: 0;
+    overflow: hidden;
+  }
+  #pane-left  { flex: 0 0 auto; width: 44%; }
+  #pane-right { flex: 1 1 0; }
+
+  .pane-header {
+    flex-shrink: 0;
+    padding: 9px 18px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px; color: var(--muted);
+    letter-spacing: 2px; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .pane-header .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent2); box-shadow: 0 0 8px rgba(255,107,53,0.6);
+    animation: pulse 2s infinite; flex-shrink: 0;
+  }
+  .pane-header .dot.green { background: var(--green); box-shadow: var(--glow2); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  #source-input {
+    flex: 1;
+    background: var(--bg); border: none;
+    color: var(--accent); font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; line-height: 1.7;
+    padding: 18px; resize: none; outline: none; letter-spacing: 0.3px;
+    tab-size: 4;
+  }
+  #source-input::placeholder { color: var(--dim); }
+
+  #splitter {
+    flex-shrink: 0; width: 6px;
+    background: var(--border);
+    cursor: col-resize;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+    position: relative;
+  }
+  #splitter:hover, #splitter.dragging { background: var(--accent2); }
+  #splitter::after {
+    content: '⋮'; color: var(--dim); font-size: 14px;
+    position: absolute; top: 50%; transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  #output-area {
+    flex: 1; overflow-y: auto; overflow-x: auto;
+    padding: 18px 22px;
+    font-size: 13px; line-height: 1.75; letter-spacing: 0.3px;
+  }
+  #output-area::-webkit-scrollbar { width: 6px; height: 6px; }
+  #output-area::-webkit-scrollbar-track { background: var(--bg); }
+  #output-area::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px; background: var(--border);
+    border: 1px solid var(--border); border-radius: 2px;
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .summary-cell {
+    background: var(--panel); padding: 12px 16px;
+  }
+  .summary-key { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 5px; }
+  .summary-val { font-size: 14px; color: var(--accent); font-family: 'Orbitron', monospace; font-weight: 700; }
+  .summary-val.orange { color: var(--accent2); }
+  .summary-val.green  { color: var(--green); }
+  .summary-val.purple { color: var(--purple); }
+
+  .out-code {
+    font-family: 'Share Tech Mono', monospace;
+    white-space: pre-wrap; word-break: break-word;
+    color: var(--text);
+  }
+
+  .out-error { color: var(--error); font-size: 12px; padding: 4px 0; }
+
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; gap: 14px; opacity: 0.35;
+  }
+  .empty-state svg { opacity: 0.5; }
+  .empty-state p { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-align: center; line-height: 1.8; }
+
+  #pane-left.drag-over #source-input {
+    border: 1px dashed var(--accent2);
+    background: rgba(255,107,53,0.04);
+  }
+
+  #source-input::-webkit-scrollbar { width: 6px; }
+  #source-input::-webkit-scrollbar-track { background: var(--bg); }
+  #source-input::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+</style>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+</head>
+<body>
+
+<header>
+  <a class="logo" href="index.html">SC<span>61860</span></a>
+  <div>
+    <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:700;color:var(--accent2);letter-spacing:2px">POKE CONVERTER</div>
+    <div class="tagline">BIN / INTEL HEX → BASIC POKE</div>
+  </div>
+  <a class="nav-back" href="sc61860-pokeconv.html">↔ MAIN MODE</a>
+  <div class="badge">
+    <em>SHARP PC-12xx/13xx/14xx</em><br>
+    Generate POKE &amp;ADDR, &amp;VAL…
+  </div>
+</header>
+
+<div class="controls">
+  <button class="btn btn-orange" onclick="convert()">▶ CONVERT</button>
+  <button class="btn btn-secondary" onclick="loadFile()">↑ LOAD FILE</button>
+  <button class="btn btn-secondary" onclick="clearInput()">✕ CLEAR</button>
+  <input type="file" id="file-input" accept=".bin,.hex,.HEX,.BIN,.txt" style="display:none" onchange="handleFile(event)">
+
+  <div class="sep"></div>
+
+  <div class="fieldset">
+    <label for="start-addr">START ADDRESS</label>
+    <input id="start-addr" class="small-input" type="text" value="&amp;8000" placeholder="&amp;8000" title="Use &amp;HHHH hex or decimal">
+  </div>
+  <div class="hint">Only used for raw binary input.</div>
+
+  <div class="sep"></div>
+  <button class="btn btn-green" id="dl-bas-btn" onclick="downloadBas()" disabled>↓ BASIC TXT</button>
+  <div class="sep"></div>
+  <div class="hint" id="format-hint">Paste Intel HEX or load BIN / HEX file.</div>
+</div>
+
+<div class="workspace" id="workspace">
+  <div class="pane" id="pane-left">
+    <div class="pane-header">
+      <div class="dot"></div>
+      SOURCE INPUT
+      <span style="margin-left:auto;font-size:10px;color:var(--dim)">DROP .HEX/.BIN OR PASTE</span>
+    </div>
+    <textarea id="source-input" spellcheck="false"
+      placeholder=":10010000214601360121470136007EFE09D2190140\n:00000001FF\n\n; Intel HEX text accepted\n; For BIN load, select file and set start address"></textarea>
+  </div>
+
+  <div id="splitter"></div>
+
+  <div class="pane" id="pane-right">
+    <div class="pane-header">
+      <div class="dot green"></div>
+      BASIC OUTPUT
+    </div>
+    <div id="output-area">
+      <div class="empty-state" id="empty-state">
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="8" y="8" width="48" height="48" rx="4" stroke="#3a4a5a" stroke-width="1.5"/>
+          <path d="M18 24h28M18 32h28M18 40h18" stroke="#3a4a5a" stroke-width="1"/>
+          <circle cx="50" cy="50" r="10" fill="#0a0c10" stroke="#ff6b35" stroke-width="1.5"/>
+          <text x="50" y="54" text-anchor="middle" font-family="monospace" font-size="10" fill="#ff6b35">BAS</text>
+        </svg>
+        <p>PASTE INTEL HEX TEXT<br>OR LOAD A BINARY / HEX FILE<br>THEN PRESS ▶ CONVERT</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let lastMemory = null;
+let lastFilename = 'output';
+let binaryData = null;
+let binaryIsFile = false;
+
+function hex2(n) { return n.toString(16).toUpperCase().padStart(2, '0'); }
+function hex4(n) { return n.toString(16).toUpperCase().padStart(4, '0'); }
+
+function parseValue(token) {
+  token = token.trim();
+  if (!token) return null;
+  if (token.startsWith('&')) {
+    const h = token.slice(1);
+    if (!/^[0-9A-Fa-f]+$/.test(h)) return null;
+    return parseInt(h, 16);
+  }
+  if (/^\$[0-9A-Fa-f]+$/.test(token)) return parseInt(token.slice(1), 16);
+  if (/^\d+$/.test(token)) return parseInt(token, 10);
+  return null;
+}
+
+function normalizeHexLine(line) {
+  return line.trim().replace(/\s+/g, '');
+}
+
+function parseIntelHex(source) {
+  const memory = new Map();
+  const errors = [];
+  const lines = source.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  let extLinAddr = 0;
+  let extSegAddr = 0;
+  let eofCount = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const line = normalizeHexLine(raw);
+    if (!line.startsWith(':')) { errors.push(`Line ${i+1}: does not start with ':'`); continue; }
+    if (line.length < 11) { errors.push(`Line ${i+1}: too short`); continue; }
+    const byteCount = parseInt(line.slice(1, 3), 16);
+    const addr      = parseInt(line.slice(3, 7), 16);
+    const recordType= parseInt(line.slice(7, 9), 16);
+    const dataStr   = line.slice(9, 9 + byteCount*2);
+    const checksum  = parseInt(line.slice(9 + byteCount*2, 9 + byteCount*2 + 2), 16);
+    if (isNaN(byteCount) || isNaN(addr) || isNaN(recordType) || isNaN(checksum)) {
+      errors.push(`Line ${i+1}: invalid record format`);
+      continue;
+    }
+    const bytes = [];
+    for (let j = 0; j < byteCount; j++) {
+      const val = parseInt(dataStr.slice(j*2, j*2+2), 16);
+      if (isNaN(val)) { errors.push(`Line ${i+1}: invalid byte data`); break; }
+      bytes.push(val);
+    }
+    const sum = byteCount + (addr >> 8) + (addr & 0xFF) + recordType + bytes.reduce((s,v)=>s+v, 0);
+    if (((sum + checksum) & 0xFF) !== 0) {
+      errors.push(`Line ${i+1}: bad checksum`);
+    }
+    switch (recordType) {
+      case 0:
+        const base = (extLinAddr << 16) + (extSegAddr << 4) + addr;
+        for (let j = 0; j < bytes.length; j++) {
+          memory.set(base + j, bytes[j]);
+        }
+        break;
+      case 1:
+        eofCount++;
+        break;
+      case 2:
+        if (bytes.length !== 2) { errors.push(`Line ${i+1}: invalid segment address size`); break; }
+        extSegAddr = (bytes[0] << 8) | bytes[1];
+        extLinAddr = 0;
+        break;
+      case 4:
+        if (bytes.length !== 2) { errors.push(`Line ${i+1}: invalid linear address size`); break; }
+        extLinAddr = (bytes[0] << 8) | bytes[1];
+        extSegAddr = 0;
+        break;
+      default:
+        // ignore other record types
+        break;
+    }
+  }
+
+  if (eofCount === 0) errors.push('Intel HEX missing end-of-file record');
+  return { memory, errors };
+}
+
+function parseRawHex(source) {
+  const memory = new Map();
+  const errors = [];
+  const tokens = source.replace(/[,\s]+/g, ' ').trim().split(' ').filter(Boolean);
+  let addr = 0;
+  for (const tok of tokens) {
+    const v = parseValue(tok);
+    if (v === null || v < 0 || v > 0xFF) { errors.push(`Bad byte token: ${tok}`); continue; }
+    memory.set(addr++, v);
+  }
+  return { memory, errors };
+}
+
+function looksLikeIntelHex(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  return lines.length > 0 && lines.every(l => l.startsWith(':'));
+}
+
+function getStartAddress() {
+  const raw = document.getElementById('start-addr').value.trim();
+  const value = parseValue(raw);
+  return value === null ? 0 : value;
+}
+
+function sortedAddrs(memory) {
+  return [...memory.keys()].sort((a, b) => a - b);
+}
+
+function getBlocks(addrs) {
+  if (!addrs.length) return [];
+  const blocks = [];
+  let cur = [addrs[0]];
+  for (let i = 1; i < addrs.length; i++) {
+    if (addrs[i] === addrs[i-1] + 1) cur.push(addrs[i]);
+    else { blocks.push(cur); cur = [addrs[i]]; }
+  }
+  blocks.push(cur);
+  return blocks;
+}
+
+function buildBasic(memory) {
+  const addrs = sortedAddrs(memory);
+  if (!addrs.length) return '';
+  const lines = [];
+  let lineNum = 100;
+  const blocks = getBlocks(addrs);
+  lines.push(`10 REM GENERATED FROM ${lastFilename}`);
+
+  for (const block of blocks) {
+    let addr = block[0];
+    let values = [];
+    for (let i = 0; i < block.length; i++) {
+      const current = block[i];
+      const value = memory.get(current);
+      if (current !== addr + values.length) {
+        if (values.length) {
+          lines.push(formatPoke(lineNum, addr, values));
+          lineNum += 10;
+        }
+        addr = current;
+        values = [];
+      }
+      values.push(value);
+      if (values.length >= 12) {
+        lines.push(formatPoke(lineNum, addr, values));
+        lineNum += 10;
+        addr = current + 1;
+        values = [];
+      }
+    }
+    if (values.length) {
+      lines.push(formatPoke(lineNum, addr, values));
+      lineNum += 10;
+    }
+  }
+  return lines.join('\n');
+}
+
+function formatPoke(lineNum, addr, values) {
+  const hexValues = values.map(v => `&${hex2(v)}`);
+  return `${lineNum}: POKE &${hex4(addr)},${hexValues.join(',')}`;
+}
+
+function renderOutput(memory) {
+  const outEl = document.getElementById('output-area');
+  const empty = document.getElementById('empty-state');
+  outEl.innerHTML = '';
+  if (!memory || memory.size === 0) {
+    outEl.appendChild(empty);
+    return;
+  }
+  empty.style.display = 'none';
+
+  const addrs = sortedAddrs(memory);
+  const blocks = getBlocks(addrs);
+  const total = memory.size;
+  const sg = document.createElement('div');
+  sg.className = 'summary-grid';
+  const cells = [
+    ['START', `&${hex4(addrs[0])}`, ''],
+    ['END', `&${hex4(addrs[addrs.length-1])}`, 'orange'],
+    ['BYTES', total.toString(), 'green'],
+    ['BLOCKS', blocks.length.toString(), ''],
+    ['SPAN', `${addrs[addrs.length-1] - addrs[0] + 1} B`, 'orange'],
+    ['LINES', `${Math.ceil(total / 12) + 1}`, 'purple'],
+  ];
+  for (const [k, v, cls] of cells) {
+    const c = document.createElement('div');
+    c.className = 'summary-cell';
+    c.innerHTML = `<div class="summary-key">${k}</div><div class="summary-val ${cls}">${v}</div>`;
+    sg.appendChild(c);
+  }
+  outEl.appendChild(sg);
+
+  const code = document.createElement('div');
+  code.className = 'out-code';
+  code.textContent = buildBasic(memory);
+  outEl.appendChild(code);
+}
+
+function convert() {
+  const text = document.getElementById('source-input').value.trim();
+  const outEl = document.getElementById('output-area');
+  outEl.innerHTML = '';
+  document.getElementById('format-hint').textContent = 'Parsing...';
+  const errors = [];
+  let result = { memory: new Map(), errors: [] };
+
+  if (binaryData && !looksLikeIntelHex(text)) {
+    const start = getStartAddress();
+    if (isNaN(start) || start < 0 || start > 0xFFFF) {
+      errors.push('Invalid start address for binary input');
+    } else {
+      const memory = new Map();
+      for (let i = 0; i < binaryData.length; i++) {
+        memory.set(start + i, binaryData[i]);
+      }
+      result.memory = memory;
+    }
+  } else if (text) {
+    if (looksLikeIntelHex(text)) {
+      result = parseIntelHex(text);
+    } else {
+      result = parseRawHex(text);
+    }
+  } else {
+    errors.push('No input text or binary file loaded');
+  }
+
+  if (result.errors && result.errors.length) {
+    for (const err of result.errors) errors.push(err);
+  }
+
+  lastMemory = result.memory;
+  const enabled = lastMemory && lastMemory.size > 0;
+  document.getElementById('dl-bas-btn').disabled = !enabled;
+
+  if (errors.length) {
+    const errDiv = document.createElement('div');
+    for (const e of errors) {
+      const p = document.createElement('div');
+      p.className = 'out-error';
+      p.textContent = '⚠ ' + e;
+      errDiv.appendChild(p);
+    }
+    outEl.appendChild(errDiv);
+  }
+
+  if (enabled) {
+    renderOutput(lastMemory);
+    document.getElementById('format-hint').textContent = `Loaded ${lastMemory.size} bytes`;
+    lastFilename = lastFilename.replace(/\.[^.]+$/, '');
+  } else {
+    outEl.appendChild(document.getElementById('empty-state'));
+    document.getElementById('format-hint').textContent = 'Paste Intel HEX or load BIN / HEX file.';
+  }
+}
+
+function downloadBas() {
+  if (!lastMemory) return;
+  const text = buildBasic(lastMemory);
+  const blob = new Blob([text], { type: 'text/plain' });
+  triggerDownload(blob, lastFilename + '.bas');
+}
+
+function triggerDownload(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function loadFile() { document.getElementById('file-input').click(); }
+
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  lastFilename = file.name;
+  const ext = file.name.split('.').pop().toLowerCase();
+  binaryData = null;
+  binaryIsFile = false;
+  if (ext === 'hex' || ext === 'txt') {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      document.getElementById('source-input').value = ev.target.result;
+      convert();
+    };
+    reader.readAsText(file, 'latin1');
+  } else {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      binaryData = new Uint8Array(ev.target.result);
+      binaryIsFile = true;
+      document.getElementById('source-input').value = '';
+      document.getElementById('format-hint').textContent = `Loaded binary file (${binaryData.length} bytes). Set start address and press CONVERT.`;
+      lastMemory = null;
+      document.getElementById('dl-bas-btn').disabled = true;
+      const outEl = document.getElementById('output-area');
+      outEl.innerHTML = '';
+      outEl.appendChild(document.getElementById('empty-state'));
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  e.target.value = '';
+}
+
+const paneLeft = document.getElementById('pane-left');
+paneLeft.addEventListener('dragover', e => { e.preventDefault(); paneLeft.classList.add('drag-over'); });
+paneLeft.addEventListener('dragleave', () => paneLeft.classList.remove('drag-over'));
+paneLeft.addEventListener('drop', e => {
+  e.preventDefault();
+  paneLeft.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const event = { target: { files: [file] } };
+  handleFile(event);
+});
+
+function clearInput() {
+  document.getElementById('source-input').value = '';
+  document.getElementById('output-area').innerHTML = '';
+  document.getElementById('output-area').appendChild(document.getElementById('empty-state'));
+  document.getElementById('empty-state').style.display = '';
+  document.getElementById('dl-bas-btn').disabled = true;
+  document.getElementById('format-hint').textContent = 'Paste Intel HEX or load BIN / HEX file.';
+  lastMemory = null;
+  binaryData = null;
+  binaryIsFile = false;
+}
+
+function initSplitter() {
+  const splitter = document.getElementById('splitter');
+  const workspace = document.getElementById('workspace');
+  const paneL = document.getElementById('pane-left');
+  let dragging = false, startX = 0, startW = 0;
+  splitter.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX; startW = paneL.offsetWidth;
+    splitter.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const totalW = workspace.offsetWidth;
+    const newW = Math.min(Math.max(startW + (e.clientX - startX), 200), totalW - 200);
+    paneL.style.width = newW + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    splitter.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+}
+
+let debTimer = null;
+document.getElementById('source-input').addEventListener('input', () => {
+  clearTimeout(debTimer);
+  debTimer = setTimeout(convert, 700);
+});
+
+window.addEventListener('load', () => {
+  initSplitter();
+});
+</script>
+</body>
+</html>

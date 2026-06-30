@@ -326,6 +326,7 @@
   <button class="btn btn-orange" onclick="convert()">▶ CONVERT</button>
   <button class="btn btn-secondary" onclick="loadFile()">↑ LOAD FILE</button>
   <button class="btn btn-secondary" onclick="clearInput()">✕ CLEAR</button>
+  <button class="btn btn-green" onclick="switchToReverseMode()">↔ BIN/HEX → BAS</button>
   <input type="file" id="file-input" accept=".bas,.txt,.BAS" style="display:none" onchange="handleFile(event)">
 
   <div class="sep"></div>
@@ -786,6 +787,10 @@ function clearInput() {
   document.getElementById('dl-bin-btn').disabled  = true;
   document.getElementById('dl-disasm-btn').disabled = true;
   setPill('NO INPUT');
+}
+
+function switchToReverseMode() {
+  window.location.href = 'sc61860-pokeconv-reverse.html';
 }
 
 // ── Splitter ───────────────────────────────────────────────────────────
