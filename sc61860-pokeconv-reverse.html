@@ -517,10 +517,10 @@ function renderOutput(memory) {
   const empty = document.getElementById('empty-state');
   outEl.innerHTML = '';
   if (!memory || memory.size === 0) {
-    outEl.appendChild(empty);
+    if (empty) outEl.appendChild(empty);
     return;
   }
-  empty.style.display = 'none';
+  if (empty) empty.style.display = 'none';
 
   const addrs = sortedAddrs(memory);
   const blocks = getBlocks(addrs);
@@ -553,6 +553,7 @@ function convert() {
   const rawText = document.getElementById('source-input').value;
   const text = stripBom(rawText).trim();
   const outEl = document.getElementById('output-area');
+  const empty = document.getElementById('empty-state');
   outEl.innerHTML = '';
   const errors = [];
   let result = { memory: new Map(), errors: [] };
@@ -620,9 +621,10 @@ function convert() {
     // ensure scroll shows the new content
     outArea.scrollTop = 0;
   } else {
-    const empty = document.getElementById('empty-state');
-    empty.style.display = '';
-    outEl.appendChild(empty);
+    if (empty) {
+      empty.style.display = '';
+      outEl.appendChild(empty);
+    }
     document.getElementById('format-hint').textContent = 'Paste Intel HEX or load BIN / HEX file.';
   }
 }
@@ -739,10 +741,11 @@ paneLeft.addEventListener('drop', e => {
 });
 
 function clearInput() {
+  const outEl = document.getElementById('output-area');
+  const empty = document.getElementById('empty-state');
   document.getElementById('source-input').value = '';
-  document.getElementById('output-area').innerHTML = '';
-  document.getElementById('output-area').appendChild(document.getElementById('empty-state'));
-  document.getElementById('empty-state').style.display = '';
+  outEl.innerHTML = '';
+  if (empty) { empty.style.display = ''; outEl.appendChild(empty); }
   document.getElementById('dl-bas-btn').disabled = true;
   document.getElementById('format-hint').textContent = 'Paste Intel HEX or load BIN / HEX file.';
   lastMemory = null;
