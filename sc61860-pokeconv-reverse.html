@@ -265,7 +265,7 @@
   <button type="button" class="btn btn-orange" onclick="convert()">▶ CONVERT</button>
   <button type="button" class="btn btn-secondary" onclick="loadFile()">↑ LOAD FILE</button>
   <button type="button" class="btn btn-secondary" onclick="clearInput()">✕ CLEAR</button>
-  <input type="file" id="file-input" accept=".bin,.hex,.txt" style="display:none">
+  <input type="file" id="file-input" accept=".bin,.hex,.txt,.ihx" style="display:none">
 
   <div class="sep"></div>
 
@@ -660,7 +660,7 @@ function handleFile(e) {
   const ext = file.name.split('.').pop().toLowerCase();
   binaryData = null;
   binaryIsFile = false;
-  if (ext === 'hex' || ext === 'txt') {
+  if (ext === 'hex' || ext === 'txt' || ext === 'ihx') {
     const reader = new FileReader();
     reader.onload = ev => {
       const rawText = ev.target.result || '';
