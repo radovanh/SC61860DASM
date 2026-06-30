@@ -264,7 +264,6 @@
 <div class="controls">
   <button type="button" class="btn btn-orange" onclick="convert()">▶ CONVERT</button>
   <button type="button" class="btn btn-secondary" onclick="loadFile()">↑ LOAD FILE</button>
-  <button type="button" class="btn btn-secondary" onclick="switchToMainMode()">BAS->HEX</button>
   <button type="button" class="btn btn-secondary" onclick="clearInput()">✕ CLEAR</button>
   <input type="file" id="file-input" accept=".bin,.hex,.txt" style="display:none">
 
@@ -276,8 +275,19 @@
   </div>
   <div class="hint">Only used for raw binary input.</div>
 
+  <div style="width:12px"></div>
+
+  <div class="fieldset">
+    <label for="hex-prefix">HEX PREFIX</label>
+    <select id="hex-prefix" class="small-input">
+      <option value="&">&amp;</option>
+      <option value="&H">&amp;H</option>
+    </select>
+  </div>
+
   <div class="sep"></div>
   <button class="btn btn-green" id="dl-bas-btn" onclick="downloadBas()" disabled>↓ BASIC TXT</button>
+  <button class="btn btn-green" onclick="switchToMainMode()">BAS->HEX</button>
   <div class="sep"></div>
   <div class="hint" id="format-hint">Paste Intel HEX or load BIN / HEX file.</div>
 </div>
@@ -495,8 +505,11 @@ function buildBasic(memory) {
 }
 
 function formatPoke(lineNum, addr, values) {
-  const hexValues = values.map(v => `&${hex2(v)}`);
-  return `${lineNum}: POKE &${hex4(addr)},${hexValues.join(',')}`;
+  const prefixEl = document.getElementById('hex-prefix');
+  const prefix = prefixEl ? prefixEl.value : '&';
+  const addrStr = prefix === '&H' ? `&H${hex4(addr)}` : `&${hex4(addr)}`;
+  const hexValues = values.map(v => (prefix === '&H' ? `&H${hex2(v)}` : `&${hex2(v)}`));
+  return `${lineNum} POKE ${addrStr},${hexValues.join(',')}`;
 }
 
 function renderOutput(memory) {
@@ -594,6 +607,19 @@ function convert() {
     renderOutput(lastMemory);
     document.getElementById('format-hint').textContent = `Loaded ${lastMemory.size} bytes`;
     lastFilename = lastFilename.replace(/\.[^.]+$/, '');
+    // fallback: ensure BASIC text is visible even if renderOutput didn't show
+    const outArea = document.getElementById('output-area');
+    if (!document.getElementById('debug-basic')) {
+      const pre = document.createElement('pre');
+      pre.id = 'debug-basic';
+      pre.style.whiteSpace = 'pre-wrap';
+      pre.style.marginTop = '12px';
+      pre.style.borderTop = '1px solid rgba(255,255,255,0.04)';
+      pre.textContent = buildBasic(lastMemory);
+      outArea.appendChild(pre);
+    } else {
+      document.getElementById('debug-basic').textContent = buildBasic(lastMemory);
+    }
   } else {
     const empty = document.getElementById('empty-state');
     empty.style.display = '';
@@ -648,7 +674,7 @@ function handleFile(e) {
       document.getElementById('dl-bas-btn').disabled = true;
       convert();
     };
-    reader.readAsText(file);
+    reader.readAsText(file, 'latin1');
   } else {
     const reader = new FileReader();
     reader.onload = ev => {
