@@ -279,21 +279,12 @@
 
   <div class="fieldset">
     <label for="hex-prefix">HEX PREFIX</label>
-    <select id="hex-prefix" class="small-input">
+    <select id="hex-prefix" class="small-input" style="width:56px">
       <option value="&">&amp;</option>
       <option value="&H">&amp;H</option>
     </select>
   </div>
 
-  <div style="width:12px"></div>
-  <div class="fieldset">
-    <label for="line-length">LINE LENGTH</label>
-    <select id="line-length" class="small-input">
-      <option value="80">80</option>
-      <option value="128" selected>128</option>
-      <option value="256">256</option>
-    </select>
-  </div>
   <div style="width:12px"></div>
   <div class="fieldset">
     <label for="max-poke">MAX POKE BYTES</label>
@@ -316,16 +307,13 @@
 
   <div style="width:12px"></div>
   <div class="fieldset">
-    <label for="split-enabled">SPLIT OUTPUT</label>
-    <select id="split-enabled" class="small-input">
+    <label for="split-config">SPLIT OUTPUT</label>
+    <select id="split-config" class="small-input">
       <option value="0">No</option>
-      <option value="1">Yes</option>
+      <option value="8192">8 KB</option>
+      <option value="16384" selected>16 KB</option>
+      <option value="32768">32 KB</option>
     </select>
-  </div>
-  <div style="width:12px"></div>
-  <div class="fieldset">
-    <label for="split-threshold">SPLIT AFTER</label>
-    <input id="split-threshold" class="small-input" type="number" value="16000" min="2000" step="1000" title="Split output after this many characters">
   </div>
 
   <div class="sep"></div>
@@ -519,8 +507,6 @@ function buildBasic(memory) {
   let lineNum = 100;
   const blocks = getBlocks(addrs);
   lines.push(`10 REM GENERATED FROM ${lastFilename}`);
-  const maxLenEl = document.getElementById('line-length');
-  const maxLen = maxLenEl ? parseInt(maxLenEl.value, 10) : 128;
   const maxBytesEl = document.getElementById('max-poke');
   const maxBytes = maxBytesEl ? parseInt(maxBytesEl.value, 10) : 12;
 
@@ -541,7 +527,7 @@ function buildBasic(memory) {
       // try adding value and check if resulting line fits
       const candidate = values.concat([value]);
       const testLine = formatPoke(lineNum, addr, candidate);
-      if (candidate.length > maxBytes || testLine.length > maxLen) {
+      if (candidate.length > maxBytes) {
         if (values.length === 0) {
           // single value exceeds limits, still emit it to avoid infinite loop
           lines.push(formatPoke(lineNum, addr, candidate));
@@ -749,12 +735,9 @@ function convert() {
 }
 
 function getSplitConfig() {
-  const enabled = document.getElementById('split-enabled');
-  const threshold = document.getElementById('split-threshold');
-  return {
-    enabled: enabled ? enabled.value === '1' : false,
-    threshold: threshold ? Math.max(0, parseInt(threshold.value, 10)) : 0
-  };
+  const splitConfig = document.getElementById('split-config');
+  const threshold = splitConfig ? parseInt(splitConfig.value, 10) : 0;
+  return { enabled: threshold > 0, threshold };
 }
 
 function downloadBas() {
@@ -977,12 +960,8 @@ window.addEventListener('load', () => {
   if (maxPokeEl) maxPokeEl.addEventListener('change', convert);
   const outStyleEl = document.getElementById('out-style');
   if (outStyleEl) outStyleEl.addEventListener('change', convert);
-  const splitEnabledEl = document.getElementById('split-enabled');
-  if (splitEnabledEl) splitEnabledEl.addEventListener('change', () => { document.getElementById('dl-bas-btn').disabled = !lastMemory; });
-  const splitThresholdEl = document.getElementById('split-threshold');
-  if (splitThresholdEl) splitThresholdEl.addEventListener('input', () => { document.getElementById('dl-bas-btn').disabled = !lastMemory; });
-  const lineLenEl = document.getElementById('line-length');
-  if (lineLenEl) lineLenEl.addEventListener('change', convert);
+  const splitConfigEl = document.getElementById('split-config');
+  if (splitConfigEl) splitConfigEl.addEventListener('change', () => { document.getElementById('dl-bas-btn').disabled = !lastMemory; });
 });
 </script>
 </body>
