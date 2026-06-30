@@ -266,7 +266,7 @@
   <button type="button" class="btn btn-secondary" onclick="loadFile()">↑ LOAD FILE</button>
   <button type="button" class="btn btn-secondary" onclick="switchToMainMode()">BAS->HEX</button>
   <button type="button" class="btn btn-secondary" onclick="clearInput()">✕ CLEAR</button>
-  <input type="file" id="file-input" accept=".bin,.hex,.HEX,.BIN,.txt" style="display:none" onchange="handleFile(event)">
+  <input type="file" id="file-input" accept=".bin,.hex,.txt" style="display:none">
 
   <div class="sep"></div>
 
@@ -323,6 +323,10 @@ let binaryIsFile = false;
 function hex2(n) { return n.toString(16).toUpperCase().padStart(2, '0'); }
 function hex4(n) { return n.toString(16).toUpperCase().padStart(4, '0'); }
 
+function stripBom(text) {
+  return text.replace(/^\uFEFF/, '');
+}
+
 function parseValue(token) {
   token = token.trim();
   if (!token) return null;
@@ -337,13 +341,17 @@ function parseValue(token) {
 }
 
 function normalizeHexLine(line) {
-  return line.trim().replace(/\s+/g, '');
+  const stripped = line.split(';')[0].split('#')[0];
+  return stripped.trim().replace(/\s+/g, '');
 }
 
 function parseIntelHex(source) {
   const memory = new Map();
   const errors = [];
-  const lines = source.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const lines = source.split(/\r?\n/)
+    .map(l => l.trim())
+    .map(l => l.split(';')[0].split('#')[0].trim())
+    .filter(l => l);
   let extLinAddr = 0;
   let extSegAddr = 0;
   let eofCount = 0;
@@ -405,7 +413,10 @@ function parseIntelHex(source) {
 function parseRawHex(source) {
   const memory = new Map();
   const errors = [];
-  const tokens = source.replace(/[,\s]+/g, ' ').trim().split(' ').filter(Boolean);
+  const clean = source.split(/\r?\n/)
+    .map(l => l.split(';')[0].split('#')[0])
+    .join(' ');
+  const tokens = clean.replace(/[,\s]+/g, ' ').trim().split(' ').filter(Boolean);
   let addr = 0;
   for (const tok of tokens) {
     const v = parseValue(tok);
@@ -416,7 +427,10 @@ function parseRawHex(source) {
 }
 
 function looksLikeIntelHex(text) {
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const lines = text.split(/\r?\n/)
+    .map(l => l.trim())
+    .map(l => l.split(';')[0].split('#')[0].trim())
+    .filter(l => l);
   return lines.length > 0 && lines.every(l => l.startsWith(':'));
 }
 
@@ -523,14 +537,16 @@ function renderOutput(memory) {
 }
 
 function convert() {
-  const text = document.getElementById('source-input').value.trim();
+  const rawText = document.getElementById('source-input').value;
+  const text = stripBom(rawText).trim();
   const outEl = document.getElementById('output-area');
   outEl.innerHTML = '';
-  document.getElementById('format-hint').textContent = 'Parsing...';
   const errors = [];
   let result = { memory: new Map(), errors: [] };
+  let mode = 'none';
 
-  if (binaryData && !looksLikeIntelHex(text)) {
+  if (binaryData && (!text || !looksLikeIntelHex(text))) {
+    mode = 'binary';
     const start = getStartAddress();
     if (isNaN(start) || start < 0 || start > 0xFFFF) {
       errors.push('Invalid start address for binary input');
@@ -543,13 +559,17 @@ function convert() {
     }
   } else if (text) {
     if (looksLikeIntelHex(text)) {
+      mode = 'intel hex';
       result = parseIntelHex(text);
     } else {
+      mode = 'raw hex';
       result = parseRawHex(text);
     }
   } else {
     errors.push('No input text or binary file loaded');
   }
+
+  document.getElementById('format-hint').textContent = mode === 'none' ? 'Paste Intel HEX or load BIN / HEX file.' : `Parsing ${mode}...`;
 
   if (result.errors && result.errors.length) {
     for (const err of result.errors) errors.push(err);
@@ -599,7 +619,10 @@ function triggerDownload(blob, name) {
 
 function loadFile() {
   const fileInput = document.getElementById('file-input');
-  if (fileInput) fileInput.click();
+  if (fileInput) {
+    fileInput.value = '';
+    fileInput.click();
+  }
 }
 
 function switchToMainMode() { window.location.href = 'sc61860-pokeconv.html'; }
@@ -615,17 +638,25 @@ function handleFile(e) {
   if (ext === 'hex' || ext === 'txt') {
     const reader = new FileReader();
     reader.onload = ev => {
-      document.getElementById('source-input').value = ev.target.result;
+      const rawText = ev.target.result || '';
+      const text = stripBom(rawText);
+      document.getElementById('source-input').value = text;
+      binaryData = null;
+      binaryIsFile = false;
+      document.getElementById('format-hint').textContent = `Loaded ${file.name} (${text.length} chars)`;
+      lastMemory = null;
+      document.getElementById('dl-bas-btn').disabled = true;
       convert();
     };
-    reader.readAsText(file, 'latin1');
+    reader.readAsText(file);
   } else {
     const reader = new FileReader();
     reader.onload = ev => {
       binaryData = new Uint8Array(ev.target.result);
       binaryIsFile = true;
-      document.getElementById('source-input').value = '';
-      document.getElementById('format-hint').textContent = `Loaded binary file (${binaryData.length} bytes). Set start address and press CONVERT.`;
+      const text = `; BINARY FILE LOADED: ${file.name} (${binaryData.length} bytes)\n; Set start address and press CONVERT.`;
+      document.getElementById('source-input').value = text;
+      document.getElementById('format-hint').textContent = `Loaded binary file ${file.name} (${binaryData.length} bytes)`;
       lastMemory = null;
       document.getElementById('dl-bas-btn').disabled = true;
       const outEl = document.getElementById('output-area');
@@ -633,7 +664,6 @@ function handleFile(e) {
       const empty = document.getElementById('empty-state');
       empty.style.display = '';
       outEl.appendChild(empty);
-      convert();
     };
     reader.readAsArrayBuffer(file);
   }
