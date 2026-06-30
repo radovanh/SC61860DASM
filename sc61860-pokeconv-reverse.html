@@ -604,22 +604,17 @@ function convert() {
   }
 
   if (enabled) {
+    // render and ensure BASIC is shown
     renderOutput(lastMemory);
     document.getElementById('format-hint').textContent = `Loaded ${lastMemory.size} bytes`;
     lastFilename = lastFilename.replace(/\.[^.]+$/, '');
-    // fallback: ensure BASIC text is visible even if renderOutput didn't show
+    // append explicit BASIC code block so it's always visible
     const outArea = document.getElementById('output-area');
-    if (!document.getElementById('debug-basic')) {
-      const pre = document.createElement('pre');
-      pre.id = 'debug-basic';
-      pre.style.whiteSpace = 'pre-wrap';
-      pre.style.marginTop = '12px';
-      pre.style.borderTop = '1px solid rgba(255,255,255,0.04)';
-      pre.textContent = buildBasic(lastMemory);
-      outArea.appendChild(pre);
-    } else {
-      document.getElementById('debug-basic').textContent = buildBasic(lastMemory);
-    }
+    const basicBlock = document.createElement('div');
+    basicBlock.className = 'out-code';
+    basicBlock.style.marginTop = '12px';
+    basicBlock.textContent = buildBasic(lastMemory);
+    outArea.appendChild(basicBlock);
   } else {
     const empty = document.getElementById('empty-state');
     empty.style.display = '';
@@ -680,7 +675,22 @@ function handleFile(e) {
     reader.onload = ev => {
       binaryData = new Uint8Array(ev.target.result);
       binaryIsFile = true;
-      const text = `; BINARY FILE LOADED: ${file.name} (${binaryData.length} bytes)\n; Set start address and press CONVERT.`;
+      // produce a readable hex dump for the left pane so user can see contents
+      const bytes = binaryData;
+      const rows = [];
+      const width = 16;
+      const startAddr = getStartAddress();
+      for (let off = 0; off < bytes.length; off += width) {
+        const rowAddr = startAddr + off;
+        const chunk = [];
+        for (let i = 0; i < width; i++) {
+          const idx = off + i;
+          if (idx < bytes.length) chunk.push(hex2(bytes[idx]));
+          else chunk.push('  ');
+        }
+        rows.push(`${hex4(rowAddr)}: ${chunk.join(' ')}`);
+      }
+      const text = `; BINARY FILE LOADED: ${file.name} (${binaryData.length} bytes)\n` + rows.join('\n');
       document.getElementById('source-input').value = text;
       document.getElementById('format-hint').textContent = `Loaded binary file ${file.name} (${binaryData.length} bytes)`;
       lastMemory = null;
