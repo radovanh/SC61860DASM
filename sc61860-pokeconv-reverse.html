@@ -285,6 +285,16 @@
     </select>
   </div>
 
+  <div style="width:12px"></div>
+  <div class="fieldset">
+    <label for="line-length">LINE LENGTH</label>
+    <select id="line-length" class="small-input">
+      <option value="80">80</option>
+      <option value="128" selected>128</option>
+      <option value="256">256</option>
+    </select>
+  </div>
+
   <div class="sep"></div>
   <button class="btn btn-green" id="dl-bas-btn" onclick="downloadBas()" disabled>↓ BASIC TXT</button>
   <button class="btn btn-green" onclick="switchToMainMode()">BAS->HEX</button>
@@ -473,6 +483,8 @@ function buildBasic(memory) {
   let lineNum = 100;
   const blocks = getBlocks(addrs);
   lines.push(`10 REM GENERATED FROM ${lastFilename}`);
+  const maxLenEl = document.getElementById('line-length');
+  const maxLen = maxLenEl ? parseInt(maxLenEl.value, 10) : 128;
 
   for (const block of blocks) {
     let addr = block[0];
@@ -488,12 +500,25 @@ function buildBasic(memory) {
         addr = current;
         values = [];
       }
-      values.push(value);
-      if (values.length >= 12) {
-        lines.push(formatPoke(lineNum, addr, values));
-        lineNum += 10;
-        addr = current + 1;
-        values = [];
+      // try adding value and check if resulting line fits
+      const candidate = values.concat([value]);
+      const testLine = formatPoke(lineNum, addr, candidate);
+      if (testLine.length > maxLen) {
+        if (values.length === 0) {
+          // single value exceeds maxLen, still emit it to avoid infinite loop
+          lines.push(formatPoke(lineNum, addr, candidate));
+          lineNum += 10;
+          addr = current + 1;
+          values = [];
+        } else {
+          // flush current values, start new line with this value
+          lines.push(formatPoke(lineNum, addr, values));
+          lineNum += 10;
+          addr = current;
+          values = [value];
+        }
+      } else {
+        values.push(value);
       }
     }
     if (values.length) {
@@ -791,6 +816,10 @@ window.addEventListener('load', () => {
   if (fileInput) {
     fileInput.addEventListener('change', handleFile);
   }
+  const prefixEl = document.getElementById('hex-prefix');
+  if (prefixEl) prefixEl.addEventListener('change', convert);
+  const lineLenEl = document.getElementById('line-length');
+  if (lineLenEl) lineLenEl.addEventListener('change', convert);
 });
 </script>
 </body>
