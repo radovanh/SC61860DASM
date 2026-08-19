@@ -482,10 +482,12 @@ function buildLoaderLines(deviceKey, startAddr, endAddr, memCheckEnabled) {
   const stmts = [];
   if (memCheckEnabled) {
     const p = dev.pointer, d = dev.checkDefault;
+    const defaultValue = d.lo + 256 * d.hi;
+    const length = endAddr - startAddr + 1;
     stmts.push(() => `C=PEEK(${p.lo})`);
     stmts.push(() => `D=PEEK(${p.hi})`);
-    stmts.push((forLn) => `IF C<>${d.lo} THEN ${forLn}`);
-    stmts.push((forLn) => `IF D<>${d.hi} THEN ${forLn}`);
+    stmts.push(() => `B=C+256*D`);
+    stmts.push((forLn) => `IF B-${defaultValue}>${length} THEN ${forLn}`);
     stmts.push(() => `PRINT "${MEMCHECK_MESSAGE}"`);
     stmts.push(() => `END`);
   }
