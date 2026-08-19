@@ -532,66 +532,111 @@ function encodeCompressedTokens(bytes) {
   return tokens;
 }
 
+// Line merging: multiple statements can share one physical BASIC line,
+// separated by colons, as long as doing so can't break a jump.
+//  - A statement that's the TARGET of some IF/GOTO elsewhere must start
+//    its own line — GOTO/THEN can only address a line number, not a
+//    position partway through one, so folding a jump target into the
+//    previous line would make it unreachable.
+//  - 'if' and 'goto' statements only ever appear as the LAST statement on
+//    a line, never followed by more statements on the same line.
+//    Conservative form, matches how these loaders have been hand-verified
+//    on real hardware so far.
+// MAX_STATEMENTS_PER_LINE caps how many statements can share one line even
+// when neither rule above would stop it, for the same conservative reason
+// BYTES_PER_LINE is capped — real per-line length limits aren't documented.
+const MAX_STATEMENTS_PER_LINE = 2;
+
 // ── Loader line builder (mirrors the CLI tool exactly) ─────────────────
 // With compressEnabled off, the body is the classic fixed FOR/READ/POKE/NEXT
 // loop. With it on, the body instead walks the DATA stream one record at a
 // time via an equivalent GOTO-driven loop, since a single zero-run record
 // can fill many addresses at once (see bin2basic-loader.js for the full
-// design note — this mirrors it exactly).
+// design note — this mirrors it exactly). Statements are then merged onto
+// shared lines wherever that's safe (see MAX_STATEMENTS_PER_LINE above).
 function buildLoaderLines(deviceKey, startAddr, endAddr, memCheckEnabled, compressEnabled) {
   const dev = DEVICES[deviceKey];
-  const stmts = [];
-  const push = (fn) => { stmts.push(fn); return stmts.length - 1; };
+  const stmts = [];       // { type: 'plain'|'if'|'goto'|'end', render(L) => string }
+  const targets = new Set();
+  const push = (type, fn) => { stmts.push({ type, render: fn }); return stmts.length - 1; };
+  const mark = (idx) => { targets.add(idx); return idx; };
 
   let bodyStartIndex = -1;
   if (memCheckEnabled) {
     const p = dev.pointer, d = dev.checkDefault;
     const defaultValue = d.lo + 256 * d.hi;
     const length = endAddr - startAddr + 1;
-    push(() => `C=PEEK(${p.lo})`);
-    push(() => `D=PEEK(${p.hi})`);
-    push(() => `B=C+256*D`);
-    push((L) => `IF B-${defaultValue}>${length} THEN ${L[bodyStartIndex]}`);
-    push(() => `PRINT "${MEMCHECK_MESSAGE}"`);
-    push(() => `END`);
+    push('plain', () => `C=PEEK(${p.lo})`);
+    push('plain', () => `D=PEEK(${p.hi})`);
+    push('plain', () => `B=C+256*D`);
+    push('if', (L) => `IF B-${defaultValue}>${length} THEN ${L[bodyStartIndex]}`);
+    push('plain', () => `PRINT "${MEMCHECK_MESSAGE}"`);
+    push('end', () => `END`);
   }
 
   if (compressEnabled) {
     let runIndex;
     let doneIndex;
-    bodyStartIndex = stmts.length;
-    push(() => `A=${startAddr}`);
-    const loopTopIndex = push((L) => `IF A>${endAddr} THEN ${L[doneIndex]}`);
-    push(() => `READ B`);
-    push((L) => `IF B=${RUN_SENTINEL} THEN ${L[runIndex]}`);
-    push(() => `POKE A,B`);
-    push(() => `A=A+1`);
-    push((L) => `GOTO ${L[loopTopIndex]}`);
-    runIndex = stmts.length;
-    push(() => `READ N`);
-    const runLoopIndex = stmts.length;
-    push(() => `POKE A,0`);
-    push(() => `A=A+1`);
-    push(() => `N=N-1`);
-    push((L) => `IF N>0 THEN ${L[runLoopIndex]}`);
-    push((L) => `GOTO ${L[loopTopIndex]}`);
-    doneIndex = stmts.length;
-    push(() => `CALL ${startAddr}`);
-    push(() => `END`);
+    bodyStartIndex = mark(stmts.length);
+    push('plain', () => `A=${startAddr}`);
+    const loopTopIndex = mark(push('if', (L) => `IF A>${endAddr} THEN ${L[doneIndex]}`));
+    push('plain', () => `READ B`);
+    push('if', (L) => `IF B=${RUN_SENTINEL} THEN ${L[runIndex]}`);
+    push('plain', () => `POKE A,B`);
+    push('plain', () => `A=A+1`);
+    push('goto', (L) => `GOTO ${L[loopTopIndex]}`);
+    runIndex = mark(stmts.length);
+    push('plain', () => `READ N`);
+    const runLoopIndex = mark(stmts.length);
+    push('plain', () => `POKE A,0`);
+    push('plain', () => `A=A+1`);
+    push('plain', () => `N=N-1`);
+    push('if', (L) => `IF N>0 THEN ${L[runLoopIndex]}`);
+    push('goto', (L) => `GOTO ${L[loopTopIndex]}`);
+    doneIndex = mark(stmts.length);
+    push('plain', () => `CALL ${startAddr}`);
+    push('end', () => `END`);
   } else {
-    bodyStartIndex = stmts.length;
-    push(() => `FOR A=${startAddr} TO ${endAddr}`);
-    push(() => `READ B`);
-    push(() => `POKE A,B`);
-    push(() => `NEXT A`);
-    push(() => `CALL ${startAddr}`);
-    push(() => `END`);
+    bodyStartIndex = mark(stmts.length);
+    push('plain', () => `FOR A=${startAddr} TO ${endAddr}`);
+    push('plain', () => `READ B`);
+    push('plain', () => `POKE A,B`);
+    push('plain', () => `NEXT A`);
+    push('plain', () => `CALL ${startAddr}`);
+    push('end', () => `END`);
   }
 
   const lineNumbers = [];
   let ln = HEADER_LINE_STEP;
   for (let i = 0; i < stmts.length; i++) { lineNumbers.push(ln); ln += HEADER_LINE_STEP; }
-  return stmts.map((fn, i) => `${lineNumbers[i]} ${fn(lineNumbers)}`);
+
+  // Group consecutive statements onto shared lines: a group always starts
+  // fresh at a jump target, and otherwise keeps absorbing the next
+  // statement until the cap is hit, the next statement is itself a
+  // target, or the statement just added was an 'if'/'goto'/'end'.
+  const groups = [];
+  let i = 0;
+  while (i < stmts.length) {
+    const group = [i];
+    let lastType = stmts[i].type;
+    i++;
+    while (
+      i < stmts.length &&
+      group.length < MAX_STATEMENTS_PER_LINE &&
+      !targets.has(i) &&
+      lastType !== 'if' && lastType !== 'goto' && lastType !== 'end'
+    ) {
+      group.push(i);
+      lastType = stmts[i].type;
+      i++;
+    }
+    groups.push(group);
+  }
+
+  return groups.map((group) => {
+    const text = group.map((idx) => stmts[idx].render(lineNumbers)).join(': ');
+    return `${lineNumbers[group[0]]} ${text}`;
+  });
 }
 
 function portConfigText(deviceKey, eolName, termByte) {
