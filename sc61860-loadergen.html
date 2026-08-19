@@ -322,6 +322,17 @@
   </div>
 
   <div class="sep"></div>
+
+  <div class="toggle-group">
+    <span class="toggle-label">COMPRESS ZEROS</span>
+    <div class="toggle-wrap" id="compress-toggle" onclick="cycleCompress()">
+      <div class="toggle-opt" id="cz-on">ON</div>
+      <div class="toggle-opt active" id="cz-off">OFF</div>
+      <div class="toggle-slider" id="cz-slider"></div>
+    </div>
+  </div>
+
+  <div class="sep"></div>
   <button class="btn btn-green" id="dl-btn" onclick="downloadLoader()" disabled>↓ LOADER TXT</button>
 
   <div class="sep"></div>
@@ -413,6 +424,7 @@ let fileBytes = null;
 let fileBaseName = 'loader';
 let generatedBytes = null;
 let memcheckOn = true;
+let compressOn = false;
 
 const deviceSel   = document.getElementById('device-sel');
 const configSel   = document.getElementById('config-sel');
@@ -440,6 +452,21 @@ function updateMemcheckUI() {
   const wrap   = document.getElementById('memcheck-toggle');
   const slider = document.getElementById('mc-slider');
   const active = document.getElementById(memcheckOn ? 'mc-on' : 'mc-off');
+  slider.style.left  = active.offsetLeft + 'px';
+  slider.style.width = active.offsetWidth + 'px';
+}
+
+// ── Zero-run compression toggle ─────────────────────────────────────────
+function cycleCompress() {
+  compressOn = !compressOn;
+  updateCompressUI();
+}
+function updateCompressUI() {
+  document.getElementById('cz-on').classList.toggle('active', compressOn);
+  document.getElementById('cz-off').classList.toggle('active', !compressOn);
+  const wrap   = document.getElementById('compress-toggle');
+  const slider = document.getElementById('cz-slider');
+  const active = document.getElementById(compressOn ? 'cz-on' : 'cz-off');
   slider.style.left  = active.offsetLeft + 'px';
   slider.style.width = active.offsetWidth + 'px';
 }
@@ -476,34 +503,95 @@ function parseTermInput(str) {
   return { ok: true, value: val };
 }
 
+// Zero-run compression: 256 (one past the 0-255 byte range) can never
+// appear as a real byte, so it marks a run-length record in the DATA
+// stream instead of a literal byte; the next DATA value is the run
+// length. Only runs of MIN_RUN_LENGTH+ zero bytes are worth it — a run
+// always costs exactly 2 DATA values, so anything shorter is cheaper left
+// as literal zeros.
+const RUN_SENTINEL = 256;
+const MIN_RUN_LENGTH = 4;
+
+function encodeCompressedTokens(bytes) {
+  const tokens = [];
+  let i = 0;
+  while (i < bytes.length) {
+    if (bytes[i] === 0) {
+      let j = i;
+      while (j < bytes.length && bytes[j] === 0) j++;
+      const runLength = j - i;
+      if (runLength >= MIN_RUN_LENGTH) {
+        tokens.push(RUN_SENTINEL, runLength);
+        i = j;
+        continue;
+      }
+    }
+    tokens.push(bytes[i]);
+    i++;
+  }
+  return tokens;
+}
+
 // ── Loader line builder (mirrors the CLI tool exactly) ─────────────────
-function buildLoaderLines(deviceKey, startAddr, endAddr, memCheckEnabled) {
+// With compressEnabled off, the body is the classic fixed FOR/READ/POKE/NEXT
+// loop. With it on, the body instead walks the DATA stream one record at a
+// time via an equivalent GOTO-driven loop, since a single zero-run record
+// can fill many addresses at once (see bin2basic-loader.js for the full
+// design note — this mirrors it exactly).
+function buildLoaderLines(deviceKey, startAddr, endAddr, memCheckEnabled, compressEnabled) {
   const dev = DEVICES[deviceKey];
   const stmts = [];
+  const push = (fn) => { stmts.push(fn); return stmts.length - 1; };
+
+  let bodyStartIndex = -1;
   if (memCheckEnabled) {
     const p = dev.pointer, d = dev.checkDefault;
     const defaultValue = d.lo + 256 * d.hi;
     const length = endAddr - startAddr + 1;
-    stmts.push(() => `C=PEEK(${p.lo})`);
-    stmts.push(() => `D=PEEK(${p.hi})`);
-    stmts.push(() => `B=C+256*D`);
-    stmts.push((forLn) => `IF B-${defaultValue}>${length} THEN ${forLn}`);
-    stmts.push(() => `PRINT "${MEMCHECK_MESSAGE}"`);
-    stmts.push(() => `END`);
+    push(() => `C=PEEK(${p.lo})`);
+    push(() => `D=PEEK(${p.hi})`);
+    push(() => `B=C+256*D`);
+    push((L) => `IF B-${defaultValue}>${length} THEN ${L[bodyStartIndex]}`);
+    push(() => `PRINT "${MEMCHECK_MESSAGE}"`);
+    push(() => `END`);
   }
-  const forIndex = stmts.length;
-  stmts.push(() => `FOR A=${startAddr} TO ${endAddr}`);
-  stmts.push(() => `READ B`);
-  stmts.push(() => `POKE A,B`);
-  stmts.push(() => `NEXT A`);
-  stmts.push(() => `CALL ${startAddr}`);
-  stmts.push(() => `END`);
+
+  if (compressEnabled) {
+    let runIndex;
+    let doneIndex;
+    bodyStartIndex = stmts.length;
+    push(() => `A=${startAddr}`);
+    const loopTopIndex = push((L) => `IF A>${endAddr} THEN ${L[doneIndex]}`);
+    push(() => `READ B`);
+    push((L) => `IF B=${RUN_SENTINEL} THEN ${L[runIndex]}`);
+    push(() => `POKE A,B`);
+    push(() => `A=A+1`);
+    push((L) => `GOTO ${L[loopTopIndex]}`);
+    runIndex = stmts.length;
+    push(() => `READ N`);
+    const runLoopIndex = stmts.length;
+    push(() => `POKE A,0`);
+    push(() => `A=A+1`);
+    push(() => `N=N-1`);
+    push((L) => `IF N>0 THEN ${L[runLoopIndex]}`);
+    push((L) => `GOTO ${L[loopTopIndex]}`);
+    doneIndex = stmts.length;
+    push(() => `CALL ${startAddr}`);
+    push(() => `END`);
+  } else {
+    bodyStartIndex = stmts.length;
+    push(() => `FOR A=${startAddr} TO ${endAddr}`);
+    push(() => `READ B`);
+    push(() => `POKE A,B`);
+    push(() => `NEXT A`);
+    push(() => `CALL ${startAddr}`);
+    push(() => `END`);
+  }
 
   const lineNumbers = [];
   let ln = HEADER_LINE_STEP;
   for (let i = 0; i < stmts.length; i++) { lineNumbers.push(ln); ln += HEADER_LINE_STEP; }
-  const forLineNumber = lineNumbers[forIndex];
-  return stmts.map((fn, i) => `${lineNumbers[i]} ${fn(forLineNumber)}`);
+  return stmts.map((fn, i) => `${lineNumbers[i]} ${fn(lineNumbers)}`);
 }
 
 function portConfigText(deviceKey, eolName, termByte) {
@@ -641,12 +729,14 @@ function generate() {
   const deviceKey = deviceSel.value;
   const termByte  = termResult.value;
   const endAddr   = startAddr + fileBytes.length - 1;
-  const lines     = buildLoaderLines(deviceKey, startAddr, endAddr, memcheckOn);
+  const lines     = buildLoaderLines(deviceKey, startAddr, endAddr, memcheckOn, compressOn);
+
+  const tokens = compressOn ? encodeCompressedTokens(fileBytes) : Array.from(fileBytes);
 
   let dataLn = DATA_LINE_START;
-  for (let i = 0; i < fileBytes.length; i += bpl) {
-    const chunk = fileBytes.slice(i, i + bpl);
-    lines.push(`${dataLn} DATA ${Array.from(chunk).join(',')}`);
+  for (let i = 0; i < tokens.length; i += bpl) {
+    const chunk = tokens.slice(i, i + bpl);
+    lines.push(`${dataLn} DATA ${chunk.join(',')}`);
     dataLn += DATA_LINE_STEP;
   }
 
@@ -676,6 +766,7 @@ function generate() {
     ['LINES', lines.length.toString(), ''],
     ['EOL / EOF', `${eolName} / ${termByte !== null ? '&' + hex2(termByte) : 'NONE'}`, 'purple'],
     ['MEM CHECK', memcheckOn ? 'ON' : 'OFF', memcheckOn ? 'green' : ''],
+    ['COMPRESS', compressOn ? `ON (${tokens.length} vs ${fileBytes.length})` : 'OFF', compressOn ? 'green' : ''],
   ];
   for (const [k, v, cls] of cells) {
     const c = document.createElement('div');
@@ -767,6 +858,7 @@ function initSplitter() {
 window.addEventListener('load', () => {
   onDeviceChange();
   updateMemcheckUI();
+  updateCompressUI();
   initSplitter();
 });
 </script>
