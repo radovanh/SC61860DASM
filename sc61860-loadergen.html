@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC61860 Loader Generator — BIN → BASIC POKE Loader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0a0c10;
+    --panel:    #0f1319;
+    --border:   #1e2d3d;
+    --accent:   #00e5ff;
+    --accent2:  #ff6b35;
+    --green:    #39ff14;
+    --purple:   #c792ea;
+    --dim:      #3a4a5a;
+    --text:     #c8d8e8;
+    --muted:    #5a7a8a;
+    --addr:     #ff6b35;
+    --hex:      #00e5ff;
+    --ascii:    #c8d8e8;
+    --error:    #ff4444;
+    --glow:     0 0 8px rgba(0,229,255,0.4);
+    --glow2:    0 0 8px rgba(57,255,20,0.3);
+    --glow3:    0 0 8px rgba(199,146,234,0.4);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.10) 2px, rgba(0,0,0,0.10) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  header {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: linear-gradient(180deg, rgba(0,229,255,0.04) 0%, transparent 100%);
+    position: relative;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+    opacity: 0.45;
+  }
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900; font-size: 20px;
+    color: var(--accent); text-shadow: var(--glow);
+    letter-spacing: 2px; white-space: nowrap; text-decoration: none;
+  }
+  .logo span { color: var(--accent2); text-shadow: 0 0 8px rgba(255,107,53,0.5); }
+  .tagline { color: var(--muted); font-size: 11px; letter-spacing: 1px; }
+  .nav-back {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    color: var(--muted); text-decoration: none; letter-spacing: 1px;
+    border: 1px solid var(--dim); padding: 5px 12px; border-radius: 2px;
+    transition: all 0.2s;
+  }
+  .nav-back:hover { color: var(--accent); border-color: var(--accent); }
+  .badge {
+    margin-left: auto; font-size: 11px; color: var(--muted);
+    text-align: right; line-height: 1.6;
+  }
+  .badge em { color: var(--accent2); font-style: normal; }
+
+  /* ── CONTROLS ── */
+  .controls {
+    flex-shrink: 0;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 9px 28px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    row-gap: 7px;
+  }
+
+  label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+
+  .btn {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; padding: 0 15px; border: 1px solid currentColor;
+    background: transparent; cursor: pointer; border-radius: 2px;
+    transition: all 0.2s; text-transform: uppercase; white-space: nowrap;
+    height: 28px; display: flex; align-items: center; gap: 6px;
+  }
+  .btn-primary   { color: var(--accent); border-color: var(--accent); }
+  .btn-primary:hover  { background: rgba(0,229,255,0.1); box-shadow: var(--glow); }
+  .btn-orange    { color: var(--accent2); border-color: var(--accent2); }
+  .btn-orange:hover   { background: rgba(255,107,53,0.1); box-shadow: 0 0 8px rgba(255,107,53,0.4); }
+  .btn-green     { color: var(--green); border-color: var(--green); }
+  .btn-green:hover    { background: rgba(57,255,20,0.08); box-shadow: var(--glow2); }
+  .btn-secondary { color: var(--muted); border-color: var(--dim); }
+  .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+  .btn:disabled { opacity: 0.35; pointer-events: none; }
+
+  .sep { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+
+  .fieldset { display: grid; gap: 6px; }
+  .small-input {
+    padding: 7px 10px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-family: 'Share Tech Mono', monospace;
+    font-size: 12px; border-radius: 2px; outline: none;
+  }
+  select.small-input { width: 108px; }
+  .hint { font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+
+  /* toggle */
+  .toggle-group { display: flex; align-items: center; gap: 7px; }
+  .toggle-label { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; white-space: nowrap; }
+  .toggle-wrap {
+    position: relative; display: flex; align-items: stretch;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 2px; overflow: hidden; cursor: pointer;
+    user-select: none; height: 28px;
+  }
+  .toggle-opt {
+    padding: 0 14px; display: flex; align-items: center;
+    font-family: 'Orbitron', monospace; font-size: 10px;
+    font-weight: 700; letter-spacing: 1px; color: var(--muted);
+    transition: color 0.18s; position: relative; z-index: 1; white-space: nowrap;
+  }
+  .toggle-slider {
+    position: absolute; top: 2px; bottom: 2px; border-radius: 1px;
+    background: rgba(57,255,20,0.12); border: 1px solid rgba(57,255,20,0.55);
+    transition: left 0.16s cubic-bezier(.4,0,.2,1), width 0.16s cubic-bezier(.4,0,.2,1);
+    z-index: 0;
+  }
+  .toggle-opt.active { color: var(--green); }
+
+  /* ── WORKSPACE SPLIT ── */
+  .workspace { flex: 1; display: flex; flex-direction: row; min-height: 0; overflow: hidden; }
+  .pane { display: flex; flex-direction: column; min-width: 120px; min-height: 0; overflow: hidden; }
+  #pane-left  { flex: 0 0 auto; width: 40%; }
+  #pane-right { flex: 1 1 0; }
+
+  .pane-header {
+    flex-shrink: 0; padding: 9px 18px; background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .pane-header .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent2); box-shadow: 0 0 8px rgba(255,107,53,0.6);
+    animation: pulse 2s infinite; flex-shrink: 0;
+  }
+  .pane-header .dot.green { background: var(--green); box-shadow: var(--glow2); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  #src-preview {
+    flex: 1; background: var(--bg); border: none; color: var(--hex);
+    font-family: 'Share Tech Mono', monospace; font-size: 12px; line-height: 1.7;
+    padding: 18px; resize: none; outline: none; letter-spacing: 0.3px;
+  }
+  #src-preview::placeholder { color: var(--dim); }
+
+  #splitter {
+    flex-shrink: 0; width: 6px; background: var(--border); cursor: col-resize;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s; position: relative;
+  }
+  #splitter:hover, #splitter.dragging { background: var(--accent2); }
+  #splitter::after {
+    content: '⋮'; color: var(--dim); font-size: 14px;
+    position: absolute; top: 50%; transform: translateY(-50%); pointer-events: none;
+  }
+
+  #output-area {
+    flex: 1; overflow-y: auto; overflow-x: auto;
+    padding: 18px 22px; font-size: 13px; line-height: 1.75; letter-spacing: 0.3px;
+  }
+  #output-area::-webkit-scrollbar { width: 6px; height: 6px; }
+  #output-area::-webkit-scrollbar-track { background: var(--bg); }
+  #output-area::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px; background: var(--border); border: 1px solid var(--border);
+    border-radius: 2px; overflow: hidden; margin-bottom: 20px;
+  }
+  .summary-cell { background: var(--panel); padding: 12px 16px; }
+  .summary-key { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 5px; }
+  .summary-val { font-size: 14px; color: var(--accent); font-family: 'Orbitron', monospace; font-weight: 700; }
+  .summary-val.orange { color: var(--accent2); }
+  .summary-val.green  { color: var(--green); }
+  .summary-val.purple { color: var(--purple); }
+
+  .out-block-header {
+    color: var(--muted); font-size: 11px; letter-spacing: 2px;
+    border-bottom: 1px solid var(--border); padding-bottom: 4px; margin-bottom: 8px; margin-top: 22px;
+  }
+  .out-block-header:first-of-type { margin-top: 0; }
+  .out-block-header.orange { color: var(--accent2); }
+  .out-block-header.green  { color: var(--green); }
+
+  .out-code {
+    font-family: 'Share Tech Mono', monospace;
+    white-space: pre-wrap; word-break: break-word;
+    color: var(--text); margin-bottom: 10px;
+  }
+  .out-code .ln { color: var(--addr); }
+  .out-code.dim { color: var(--muted); font-size: 12px; }
+
+  .out-error { color: var(--error); font-size: 12px; padding: 4px 0; }
+  .out-warn  { color: var(--accent2); font-size: 12px; padding: 4px 0; }
+
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; gap: 14px; opacity: 0.35;
+  }
+  .empty-state svg { opacity: 0.5; }
+  .empty-state p { font-size: 12px; color: var(--muted); letter-spacing: 1px; text-align: center; line-height: 1.8; }
+
+  #pane-left.drag-over { outline: 1px dashed var(--accent2); outline-offset: -1px; background: rgba(255,107,53,0.04); }
+
+  #src-preview::-webkit-scrollbar { width: 6px; }
+  #src-preview::-webkit-scrollbar-track { background: var(--bg); }
+  #src-preview::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 3px; }
+</style>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+</head>
+<body>
+
+<header>
+  <a class="logo" href="index.html">SC<span>61860</span></a>
+  <div>
+    <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:700;color:var(--accent2);letter-spacing:2px">LOADER GENERATOR</div>
+    <div class="tagline">BIN → FOR/READ/POKE BASIC LOADER</div>
+  </div>
+  <a class="nav-back" href="index.html">← INDEX</a>
+  <div class="badge">
+    <em>PC-1401 / 1403 / 1350 / 1360</em><br>
+    carve-out pointer + port config
+  </div>
+</header>
+
+<div class="controls">
+  <button type="button" class="btn btn-orange" id="gen-btn" onclick="generate()" disabled>▶ GENERATE</button>
+  <button type="button" class="btn btn-secondary" onclick="loadFile()">↑ LOAD .BIN</button>
+  <button type="button" class="btn btn-secondary" onclick="clearInput()">✕ CLEAR</button>
+  <input type="file" id="file-input" accept=".bin,*/*" style="display:none">
+
+  <div class="sep"></div>
+
+  <div class="fieldset">
+    <label for="device-sel">DEVICE</label>
+    <select id="device-sel" class="small-input" onchange="onDeviceChange()">
+      <option value="PC-1401">PC-1401</option>
+      <option value="PC-1403">PC-1403</option>
+      <option value="PC-1350">PC-1350</option>
+      <option value="PC-1360" selected>PC-1360</option>
+    </select>
+  </div>
+  <div class="fieldset">
+    <label for="config-sel">MEMORY CONFIG</label>
+    <select id="config-sel" class="small-input" onchange="onConfigChange()" style="width:190px"></select>
+  </div>
+  <div class="fieldset">
+    <label for="start-addr">START (HEX)</label>
+    <input id="start-addr" class="small-input" type="text" value="E030" style="width:76px" oninput="onStartAddrEdit()">
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="fieldset">
+    <label for="eol-sel">EOL</label>
+    <select id="eol-sel" class="small-input" style="width:72px">
+      <option value="CR">CR</option>
+      <option value="LF">LF</option>
+      <option value="CRLF" selected>CR/LF</option>
+    </select>
+  </div>
+  <div class="fieldset">
+    <label for="term-input">EOF BYTE</label>
+    <input id="term-input" class="small-input" type="text" value="1A" style="width:64px" title='Hex byte, e.g. 1A, or "none"'>
+  </div>
+  <div class="fieldset">
+    <label for="bpl-sel">DATA/LINE</label>
+    <select id="bpl-sel" class="small-input" style="width:64px">
+      <option value="8">8</option>
+      <option value="16" selected>16</option>
+      <option value="32">32</option>
+      <option value="64">64</option>
+    </select>
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="toggle-group">
+    <span class="toggle-label">MEM CHECK</span>
+    <div class="toggle-wrap" id="memcheck-toggle" onclick="cycleMemcheck()">
+      <div class="toggle-opt active" id="mc-on">ON</div>
+      <div class="toggle-opt" id="mc-off">OFF</div>
+      <div class="toggle-slider" id="mc-slider"></div>
+    </div>
+  </div>
+
+  <div class="sep"></div>
+  <button class="btn btn-green" id="dl-btn" onclick="downloadLoader()" disabled>↓ LOADER TXT</button>
+
+  <div class="sep"></div>
+  <div class="hint" id="stat-pill">NO FILE LOADED</div>
+</div>
+
+<div class="workspace" id="workspace">
+
+  <div class="pane" id="pane-left">
+    <div class="pane-header">
+      <div class="dot"></div>
+      BINARY SOURCE
+      <span style="margin-left:auto;font-size:10px;color:var(--dim)">DROP .BIN OR LOAD FILE</span>
+    </div>
+    <textarea id="src-preview" readonly spellcheck="false" placeholder="Load or drop a .bin file — a hex preview appears here."></textarea>
+  </div>
+
+  <div id="splitter"></div>
+
+  <div class="pane" id="pane-right">
+    <div class="pane-header">
+      <div class="dot green"></div>
+      LOADER OUTPUT
+    </div>
+    <div id="output-area">
+      <div class="empty-state" id="empty-state">
+        <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="8" y="8" width="48" height="48" rx="4" stroke="#3a4a5a" stroke-width="1.5"/>
+          <path d="M18 22h28M18 30h28M18 38h18" stroke="#3a4a5a" stroke-width="1"/>
+          <circle cx="50" cy="50" r="10" fill="#0a0c10" stroke="#ff6b35" stroke-width="1.5"/>
+          <text x="50" y="54" text-anchor="middle" font-family="monospace" font-size="9" fill="#ff6b35">POKE</text>
+        </svg>
+        <p>LOAD A .BIN FILE, PICK A DEVICE<br>THEN PRESS ▶ GENERATE</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Device data: BASIC-start pointers, factory-default check values, and
+//    carve-out load addresses per device/memory configuration ─────────────
+const DEVICES = {
+  'PC-1401': {
+    pointer: { lo: 0x46e1, hi: 0x46e2 },
+    checkDefault: { lo: 0, hi: 60 },
+    configs: [
+      { id: 'std', label: 'Standard (&3800)', addr: 0x3800, note: 'Fixed conventional free-memory start address.' },
+    ],
+  },
+  'PC-1403': {
+    pointer: { lo: 0xff01, hi: 0xff02 },
+    checkDefault: { lo: 48, hi: 224 },
+    configs: [
+      { id: 'std', label: 'Standard (&E038)', addr: 0xe038, note: 'Fixed conventional free-memory start address.' },
+    ],
+  },
+  'PC-1350': {
+    pointer: { lo: 0x6f01, hi: 0x6f02 },
+    checkDefault: { lo: 48, hi: 96 },
+    flagByte: 0x6f00,
+    configs: [
+      { id: 'nocard', label: 'No RAM card (&6000)', addr: 0x6000, note: 'Internal-only user memory area — the no-card case.' },
+      { id: 'card2000', label: 'RAM card, base &2000', addr: 0x2000, note: 'Flag byte &6F00 selects this base — confirm it matches your card.' },
+      { id: 'card4000', label: 'RAM card, base &4000', addr: 0x4000, note: 'Flag byte &6F00 selects this base — confirm it matches your card.' },
+    ],
+  },
+  'PC-1360': {
+    pointer: { lo: 0xffd7, hi: 0xffd8 },
+    checkDefault: { lo: 48, hi: 160 },
+    configs: [
+      { id: 'card8k', label: '8 KB RAM card (&E030)', addr: 0xe030, note: 'No internal program RAM without a fitted card — pick the option matching your card size.' },
+      { id: 'card16k', label: '16 KB RAM card (&C030)', addr: 0xc030, note: 'No internal program RAM without a fitted card — pick the option matching your card size.' },
+      { id: 'card32k', label: '32 KB RAM card (&8030)', addr: 0x8030, note: 'No internal program RAM without a fitted card — pick the option matching your card size.' },
+    ],
+  },
+};
+const PORT_CONFIG_DEVICES = new Set(['PC-1350', 'PC-1360']);
+const EOL_LETTER = { CR: 'C', LF: 'F', CRLF: 'L' };
+const EOL_BYTES  = { CR: [0x0d], LF: [0x0a], CRLF: [0x0d, 0x0a] };
+const DATA_LINE_START = 1000, DATA_LINE_STEP = 10, HEADER_LINE_STEP = 10;
+const MEMCHECK_MESSAGE = 'MEM NOT PROTECTED';
+
+const hex  = (n) => n.toString(16).toUpperCase();
+const hex2 = (n) => n.toString(16).toUpperCase().padStart(2, '0');
+const hex4 = (n) => n.toString(16).toUpperCase().padStart(4, '0');
+
+let fileBytes = null;
+let fileBaseName = 'loader';
+let generatedBytes = null;
+let memcheckOn = true;
+
+const deviceSel   = document.getElementById('device-sel');
+const configSel   = document.getElementById('config-sel');
+const startAddrEl = document.getElementById('start-addr');
+const eolSel      = document.getElementById('eol-sel');
+const termEl      = document.getElementById('term-input');
+const bplSel      = document.getElementById('bpl-sel');
+const genBtn      = document.getElementById('gen-btn');
+const dlBtn       = document.getElementById('dl-btn');
+const statPill    = document.getElementById('stat-pill');
+const outputArea  = document.getElementById('output-area');
+const emptyState  = document.getElementById('empty-state');
+const srcPreview  = document.getElementById('src-preview');
+const fileInput   = document.getElementById('file-input');
+const paneLeft    = document.getElementById('pane-left');
+
+// ── Memcheck toggle ─────────────────────────────────────────────────────
+function cycleMemcheck() {
+  memcheckOn = !memcheckOn;
+  updateMemcheckUI();
+}
+function updateMemcheckUI() {
+  document.getElementById('mc-on').classList.toggle('active', memcheckOn);
+  document.getElementById('mc-off').classList.toggle('active', !memcheckOn);
+  const wrap   = document.getElementById('memcheck-toggle');
+  const slider = document.getElementById('mc-slider');
+  const active = document.getElementById(memcheckOn ? 'mc-on' : 'mc-off');
+  slider.style.left  = active.offsetLeft + 'px';
+  slider.style.width = active.offsetWidth + 'px';
+}
+
+// ── Device / memory-config dropdowns ───────────────────────────────────
+function currentConfig() {
+  const dev = DEVICES[deviceSel.value];
+  return dev.configs.find(c => c.id === configSel.value) || dev.configs[0];
+}
+function onDeviceChange() {
+  const dev = DEVICES[deviceSel.value];
+  configSel.innerHTML = dev.configs.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
+  applyConfig();
+}
+function onConfigChange() { applyConfig(); }
+function applyConfig() {
+  startAddrEl.value = hex(currentConfig().addr);
+}
+function onStartAddrEdit() { /* free edit, no side effects */ }
+
+// ── Parsing helpers ─────────────────────────────────────────────────────
+function parseHexAddrInput(str) {
+  const cleaned = str.trim().replace(/^&/, '').replace(/^0x/i, '');
+  if (!/^[0-9a-fA-F]+$/.test(cleaned)) return NaN;
+  return parseInt(cleaned, 16);
+}
+function parseTermInput(str) {
+  const s = str.trim();
+  if (s.toLowerCase() === 'none' || s === '') return { ok: true, value: null };
+  const cleaned = s.replace(/^&/, '').replace(/^0x/i, '');
+  if (!/^[0-9a-fA-F]{1,2}$/.test(cleaned)) return { ok: false };
+  const val = parseInt(cleaned, 16);
+  if (!Number.isFinite(val) || val < 0 || val > 0xff) return { ok: false };
+  return { ok: true, value: val };
+}
+
+// ── Loader line builder (mirrors the CLI tool exactly) ─────────────────
+function buildLoaderLines(deviceKey, startAddr, endAddr, memCheckEnabled) {
+  const dev = DEVICES[deviceKey];
+  const stmts = [];
+  if (memCheckEnabled) {
+    const p = dev.pointer, d = dev.checkDefault;
+    stmts.push(() => `C=PEEK(${p.lo})`);
+    stmts.push(() => `D=PEEK(${p.hi})`);
+    stmts.push((forLn) => `IF C<>${d.lo} THEN ${forLn}`);
+    stmts.push((forLn) => `IF D<>${d.hi} THEN ${forLn}`);
+    stmts.push(() => `PRINT "${MEMCHECK_MESSAGE}"`);
+    stmts.push(() => `END`);
+  }
+  const forIndex = stmts.length;
+  stmts.push(() => `FOR A=${startAddr} TO ${endAddr}`);
+  stmts.push(() => `READ B`);
+  stmts.push(() => `POKE A,B`);
+  stmts.push(() => `NEXT A`);
+  stmts.push(() => `CALL ${startAddr}`);
+  stmts.push(() => `END`);
+
+  const lineNumbers = [];
+  let ln = HEADER_LINE_STEP;
+  for (let i = 0; i < stmts.length; i++) { lineNumbers.push(ln); ln += HEADER_LINE_STEP; }
+  const forLineNumber = lineNumbers[forIndex];
+  return stmts.map((fn, i) => `${lineNumbers[i]} ${fn(forLineNumber)}`);
+}
+
+function portConfigText(deviceKey, eolName, termByte) {
+  if (!PORT_CONFIG_DEVICES.has(deviceKey)) return null;
+  if (termByte === null) {
+    return `${deviceKey} needs an end-of-program byte for this OPEN statement's <V2> parameter, ` +
+      `but EOF BYTE is set to "none". Pick an actual byte (e.g. the default 1A) to get the OPEN statement.`;
+  }
+  const eolLetter = EOL_LETTER[eolName];
+  const v2 = '&' + hex2(termByte);
+  const eolWord = eolName === 'CR' ? 'CR' : eolName === 'LF' ? 'LF' : 'CR/LF';
+  return (
+    `Before sending the loader with TeraTerm, configure ${deviceKey}'s serial port to match the\n` +
+    `EOL (${eolName}) / EOF (${v2}) settings above by running:\n\n` +
+    `  OPEN "1200,N,8,1,A,${eolLetter},${v2}"\n\n` +
+    `<V1>=${eolLetter} (${eolWord} line terminator), <V2>=${v2} (end-of-program terminator).\n` +
+    `Match TeraTerm's own serial setup (Setup > Serial port) to 1200 baud, 8N1, and send the\n` +
+    `generated .txt file as-is — no newline translation, since the file already contains the exact\n` +
+    `bytes above.`
+  );
+}
+
+function carveOutText(deviceKey, startAddr, length) {
+  const dev = DEVICES[deviceKey];
+  const p = dev.pointer;
+  const endAddr = startAddr + length - 1;
+  const newStart = startAddr + length;
+  const lo = newStart & 0xff;
+  const hi_ = (newStart >> 8) & 0xff;
+
+  let text =
+    `Machine code occupies &${hex(startAddr)}-&${hex(endAddr)} (${length} bytes).\n\n` +
+    `Before typing or loading the loader below, raise ${deviceKey}'s BASIC program-start pointer\n` +
+    `to &${hex(newStart)} — that reserves &${hex(startAddr)}-&${hex(endAddr)} so BASIC never writes into it:\n\n` +
+    `  POKE &${hex(p.lo)},${lo}\n` +
+    `  POKE &${hex(p.hi)},${hi_}\n\n` +
+    `Then enter/load the loader — it will be stored starting at &${hex(newStart)}, above the protected\n` +
+    `area. RUN it to POKE the binary into place, then CALL &${hex(startAddr)} to execute it.\n\n` +
+    `(Assumes little-endian pointer bytes: &${hex(p.lo)}=low, &${hex(p.hi)}=high — flip the two POKE\n` +
+    `values if that turns out backwards on real hardware.)`;
+
+  if (dev.flagByte !== undefined) {
+    text += `\n\nNote: flag byte &${hex(dev.flagByte)} selects this device's RAM-card base (&2000/&4000)\n` +
+      `vs. no-card (&6000) — make sure the memory config above matches your actual card.`;
+  }
+  if (deviceKey === 'PC-1360') {
+    text += `\n\nNote: the exact safe window also depends on your RAM card size and, if two cards are\n` +
+      `fitted, the active MEM$ mode — double-check the memory config above matches your hardware.`;
+  }
+  return text;
+}
+
+// ── File loading ─────────────────────────────────────────────────────────
+function loadFile() { fileInput.value = ''; fileInput.click(); }
+fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+paneLeft.addEventListener('dragover', e => { e.preventDefault(); paneLeft.classList.add('drag-over'); });
+paneLeft.addEventListener('dragleave', () => paneLeft.classList.remove('drag-over'));
+paneLeft.addEventListener('drop', e => {
+  e.preventDefault();
+  paneLeft.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+
+function handleFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    fileBytes = new Uint8Array(reader.result);
+    fileBaseName = file.name.replace(/\.[^.]+$/, '') || 'loader';
+    renderSourcePreview(file.name);
+    genBtn.disabled = false;
+    dlBtn.disabled = true;
+    generatedBytes = null;
+    outputArea.innerHTML = '';
+    outputArea.appendChild(emptyState);
+    emptyState.style.display = '';
+    statPill.textContent = `${file.name} — ${fileBytes.length} BYTES — PRESS GENERATE`;
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderSourcePreview(filename) {
+  const width = 16;
+  const rows = [`; ${filename}  (${fileBytes.length} bytes)`, ''];
+  for (let off = 0; off < fileBytes.length; off += width) {
+    const chunk = [];
+    for (let i = 0; i < width; i++) {
+      const idx = off + i;
+      chunk.push(idx < fileBytes.length ? hex2(fileBytes[idx]) : '  ');
+    }
+    rows.push(`${hex4(off)}: ${chunk.join(' ')}`);
+  }
+  srcPreview.value = rows.join('\n');
+}
+
+function clearInput() {
+  fileBytes = null;
+  generatedBytes = null;
+  srcPreview.value = '';
+  genBtn.disabled = true;
+  dlBtn.disabled = true;
+  outputArea.innerHTML = '';
+  outputArea.appendChild(emptyState);
+  emptyState.style.display = '';
+  statPill.textContent = 'NO FILE LOADED';
+}
+
+// ── Generate ─────────────────────────────────────────────────────────────
+function generate() {
+  outputArea.innerHTML = '';
+  const errors = [];
+
+  if (!fileBytes) { errors.push('No .bin file loaded.'); }
+
+  const startAddr = parseHexAddrInput(startAddrEl.value);
+  if (!Number.isFinite(startAddr)) errors.push('Bad start address: expected hex, e.g. 80E8 or &80E8.');
+
+  const eolName = eolSel.value;
+  const termResult = parseTermInput(termEl.value);
+  if (!termResult.ok) errors.push('Bad EOF byte: expected a hex byte like 1A, or "none".');
+
+  const bpl = parseInt(bplSel.value, 10);
+
+  if (errors.length) {
+    for (const e of errors) {
+      const p = document.createElement('div');
+      p.className = 'out-error';
+      p.textContent = '⚠ ' + e;
+      outputArea.appendChild(p);
+    }
+    return;
+  }
+  emptyState.style.display = 'none';
+
+  const deviceKey = deviceSel.value;
+  const termByte  = termResult.value;
+  const endAddr   = startAddr + fileBytes.length - 1;
+  const lines     = buildLoaderLines(deviceKey, startAddr, endAddr, memcheckOn);
+
+  let dataLn = DATA_LINE_START;
+  for (let i = 0; i < fileBytes.length; i += bpl) {
+    const chunk = fileBytes.slice(i, i + bpl);
+    lines.push(`${dataLn} DATA ${Array.from(chunk).join(',')}`);
+    dataLn += DATA_LINE_STEP;
+  }
+
+  // raw byte output for download
+  const encoder = new TextEncoder();
+  const chunks = [];
+  const eolBytes = EOL_BYTES[eolName];
+  for (const line of lines) {
+    chunks.push(encoder.encode(line));
+    chunks.push(new Uint8Array(eolBytes));
+  }
+  if (termByte !== null) chunks.push(new Uint8Array([termByte]));
+  const totalLen = chunks.reduce((n, c) => n + c.length, 0);
+  const out = new Uint8Array(totalLen);
+  let off = 0;
+  for (const c of chunks) { out.set(c, off); off += c.length; }
+  generatedBytes = out;
+
+  // ── render summary ──
+  const sg = document.createElement('div');
+  sg.className = 'summary-grid';
+  const cells = [
+    ['DEVICE', deviceKey, 'orange'],
+    ['START', `&${hex(startAddr)}`, ''],
+    ['END', `&${hex(endAddr)}`, 'orange'],
+    ['BYTES', fileBytes.length.toString(), 'green'],
+    ['LINES', lines.length.toString(), ''],
+    ['EOL / EOF', `${eolName} / ${termByte !== null ? '&' + hex2(termByte) : 'NONE'}`, 'purple'],
+    ['MEM CHECK', memcheckOn ? 'ON' : 'OFF', memcheckOn ? 'green' : ''],
+  ];
+  for (const [k, v, cls] of cells) {
+    const c = document.createElement('div');
+    c.className = 'summary-cell';
+    c.innerHTML = `<div class="summary-key">${k}</div><div class="summary-val ${cls}">${v}</div>`;
+    sg.appendChild(c);
+  }
+  outputArea.appendChild(sg);
+
+  // ── loader listing ──
+  const hdr1 = document.createElement('div');
+  hdr1.className = 'out-block-header';
+  hdr1.textContent = '; BASIC LOADER';
+  outputArea.appendChild(hdr1);
+  const code1 = document.createElement('div');
+  code1.className = 'out-code';
+  code1.textContent = lines.join('\n');
+  outputArea.appendChild(code1);
+
+  // ── port config (PC-1350 / PC-1360 only) ──
+  const portText = portConfigText(deviceKey, eolName, termByte);
+  if (portText) {
+    const hdr2 = document.createElement('div');
+    hdr2.className = 'out-block-header orange';
+    hdr2.textContent = '; SERIAL PORT CONFIG';
+    outputArea.appendChild(hdr2);
+    const code2 = document.createElement('div');
+    code2.className = 'out-code dim';
+    code2.textContent = portText;
+    outputArea.appendChild(code2);
+  }
+
+  // ── carve-out instructions ──
+  const hdr3 = document.createElement('div');
+  hdr3.className = 'out-block-header green';
+  hdr3.textContent = '; CARVE-OUT — PROTECT MEMORY FROM BASIC';
+  outputArea.appendChild(hdr3);
+  const code3 = document.createElement('div');
+  code3.className = 'out-code dim';
+  code3.textContent = carveOutText(deviceKey, startAddr, fileBytes.length);
+  outputArea.appendChild(code3);
+
+  dlBtn.disabled = false;
+  statPill.innerHTML = `${deviceKey} · ${lines.length} LINES · ${fileBytes.length} BYTES · &${hex(startAddr)}–&${hex(endAddr)}`;
+}
+
+// ── Download ─────────────────────────────────────────────────────────────
+function downloadLoader() {
+  if (!generatedBytes) return;
+  const blob = new Blob([generatedBytes], { type: 'application/octet-stream' });
+  triggerDownload(blob, fileBaseName + '.txt');
+}
+function triggerDownload(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ── Splitter ─────────────────────────────────────────────────────────────
+function initSplitter() {
+  const splitter = document.getElementById('splitter');
+  const workspace = document.getElementById('workspace');
+  const paneL = document.getElementById('pane-left');
+  let dragging = false, startX = 0, startW = 0;
+  splitter.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX; startW = paneL.offsetWidth;
+    splitter.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const totalW = workspace.offsetWidth;
+    const newW = Math.min(Math.max(startW + (e.clientX - startX), 200), totalW - 200);
+    paneL.style.width = newW + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    splitter.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  onDeviceChange();
+  updateMemcheckUI();
+  initSplitter();
+});
+</script>
+</body>
+</html>
