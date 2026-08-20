@@ -309,6 +309,17 @@
       <option value="64">64</option>
     </select>
   </div>
+  <div class="fieldset">
+    <label for="split-sel" title="Generates several independently-typeable loaders instead of one big one, each sized so its RENDERED TEXT (the actual .txt file, not the input binary) stays at or under this size">SPLIT</label>
+    <select id="split-sel" class="small-input" style="width:170px" title='Sizes each part by its rendered OUTPUT text length, not input bytes — a DATA value like "255" prints wider than "0", so this is the only way to actually bound each part. Only the last part CALLs and runs the program — see the loading instructions in the output panel after generating.'>
+      <option value="0" selected>NO SPLIT</option>
+      <option value="512">≤0.5 KB / PART (OUTPUT)</option>
+      <option value="1024">≤1 KB / PART (OUTPUT)</option>
+      <option value="2048">≤2 KB / PART (OUTPUT)</option>
+      <option value="3072">≤3 KB / PART (OUTPUT)</option>
+      <option value="4096">≤4 KB / PART (OUTPUT)</option>
+    </select>
+  </div>
 
   <div class="sep"></div>
 
@@ -423,6 +434,7 @@ const hex4 = (n) => n.toString(16).toUpperCase().padStart(4, '0');
 let fileBytes = null;
 let fileBaseName = 'loader';
 let generatedBytes = null;
+let loaderParts = null;
 let memcheckOn = true;
 let compressOn = false;
 
@@ -432,6 +444,7 @@ const startAddrEl = document.getElementById('start-addr');
 const eolSel      = document.getElementById('eol-sel');
 const termEl      = document.getElementById('term-input');
 const bplSel      = document.getElementById('bpl-sel');
+const splitSel    = document.getElementById('split-sel');
 const genBtn      = document.getElementById('gen-btn');
 const dlBtn       = document.getElementById('dl-btn');
 const statPill    = document.getElementById('stat-pill');
@@ -554,7 +567,11 @@ const MAX_STATEMENTS_PER_LINE = 2;
 // can fill many addresses at once (see bin2basic-loader.js for the full
 // design note — this mirrors it exactly). Statements are then merged onto
 // shared lines wherever that's safe (see MAX_STATEMENTS_PER_LINE above).
-function buildLoaderLines(deviceKey, startAddr, endAddr, memCheckEnabled, compressEnabled) {
+function buildLoaderLines(deviceKey, startAddr, endAddr, memCheckEnabled, compressEnabled, opts) {
+  opts = opts || {};
+  const memcheckLength = opts.memcheckLength != null ? opts.memcheckLength : (endAddr - startAddr + 1);
+  const callAddr = opts.callAddr !== undefined ? opts.callAddr : startAddr;
+
   const dev = DEVICES[deviceKey];
   const stmts = [];       // { type: 'plain'|'if'|'goto'|'end', render(L) => string }
   const targets = new Set();
@@ -565,11 +582,10 @@ function buildLoaderLines(deviceKey, startAddr, endAddr, memCheckEnabled, compre
   if (memCheckEnabled) {
     const p = dev.pointer, d = dev.checkDefault;
     const defaultValue = d.lo + 256 * d.hi;
-    const length = endAddr - startAddr + 1;
     push('plain', () => `C=PEEK(${p.lo})`);
     push('plain', () => `D=PEEK(${p.hi})`);
     push('plain', () => `B=C+256*D`);
-    push('if', (L) => `IF B-${defaultValue}>${length} THEN ${L[bodyStartIndex]}`);
+    push('if', (L) => `IF B-${defaultValue}>${memcheckLength} THEN ${L[bodyStartIndex]}`);
     push('plain', () => `PRINT "${MEMCHECK_MESSAGE}"`);
     push('end', () => `END`);
   }
@@ -594,7 +610,7 @@ function buildLoaderLines(deviceKey, startAddr, endAddr, memCheckEnabled, compre
     push('if', (L) => `IF N>0 THEN ${L[runLoopIndex]}`);
     push('goto', (L) => `GOTO ${L[loopTopIndex]}`);
     doneIndex = mark(stmts.length);
-    push('plain', () => `CALL ${startAddr}`);
+    if (callAddr !== null) push('plain', () => `CALL ${callAddr}`);
     push('end', () => `END`);
   } else {
     bodyStartIndex = mark(stmts.length);
@@ -602,7 +618,7 @@ function buildLoaderLines(deviceKey, startAddr, endAddr, memCheckEnabled, compre
     push('plain', () => `READ B`);
     push('plain', () => `POKE A,B`);
     push('plain', () => `NEXT A`);
-    push('plain', () => `CALL ${startAddr}`);
+    if (callAddr !== null) push('plain', () => `CALL ${callAddr}`);
     push('end', () => `END`);
   }
 
@@ -639,10 +655,95 @@ function buildLoaderLines(deviceKey, startAddr, endAddr, memCheckEnabled, compre
   });
 }
 
+// Builds one complete, independently-typeable loader program (header +
+// DATA lines) for a single contiguous slice of bytes. Used directly for
+// the whole binary in non-split mode, and once per chunk in split mode.
+function renderLoaderPart(deviceKey, chunkBytes, chunkStartAddr, memCheckEnabled, compressEnabled, opts, bpl) {
+  const chunkEndAddr = chunkStartAddr + chunkBytes.length - 1;
+  const lines = buildLoaderLines(deviceKey, chunkStartAddr, chunkEndAddr, memCheckEnabled, compressEnabled, opts);
+  const tokens = compressEnabled ? encodeCompressedTokens(chunkBytes) : Array.from(chunkBytes);
+  let dataLn = DATA_LINE_START;
+  for (let i = 0; i < tokens.length; i += bpl) {
+    const dataChunk = tokens.slice(i, i + bpl);
+    lines.push(`${dataLn} DATA ${dataChunk.join(',')}`);
+    dataLn += DATA_LINE_STEP;
+  }
+  return { lines, tokens, chunkEndAddr };
+}
+
+// Splits `bytes` (the FULL binary) into loader parts sized against the
+// RENDERED OUTPUT byte length (the actual .txt file TeraTerm sends), not the
+// raw input byte count. DATA values vary in printed width — a zero byte
+// prints as "0" (1 char), a 0xFF byte as "255" (3 chars) plus a comma each —
+// so a fixed input-byte chunk size doesn't reliably bound how big the
+// resulting program text ends up. This greedily grows each chunk (binary
+// search on chunk length) until adding one more byte would push the
+// rendered part over targetOutputBytes. Every trial size is rendered as if
+// it will be the LAST part (i.e. always includes the CALL statement, the
+// biggest a part can get) so no part can end up over target once the real
+// last/interior flags are assigned afterward.
+function splitIntoParts(deviceKey, bytes, startAddr, memCheckEnabled, compressEnabled, targetOutputBytes, bpl, encodeOutput) {
+  const totalLength = bytes.length;
+  const chunkSizes = [];
+  let oversizedCount = 0;
+  let minPossibleOutputBytes = Infinity;
+  let offset = 0;
+  while (offset < totalLength) {
+    const remaining = totalLength - offset;
+    let lo = 1, hi = remaining, best = 1;
+    while (lo <= hi) {
+      const mid = lo + Math.floor((hi - lo) / 2);
+      const chunkBytes = bytes.slice(offset, offset + mid);
+      const chunkStartAddr = startAddr + offset;
+      const { lines } = renderLoaderPart(
+        deviceKey, chunkBytes, chunkStartAddr, memCheckEnabled, compressEnabled,
+        { memcheckLength: totalLength, callAddr: startAddr }, bpl
+      );
+      const size = encodeOutput(lines).length;
+      if (size <= targetOutputBytes) { best = mid; lo = mid + 1; } else { hi = mid - 1; }
+    }
+    // Even a single-byte chunk can't fit under target (fixed overhead from
+    // the memcheck/header lines alone exceeds it) — take it anyway (can't
+    // make forward progress with a 0-byte chunk) and record it for the
+    // summary warning.
+    const chunkBytes1 = bytes.slice(offset, offset + best);
+    const { lines: lines1 } = renderLoaderPart(
+      deviceKey, chunkBytes1, startAddr + offset, memCheckEnabled, compressEnabled,
+      { memcheckLength: totalLength, callAddr: startAddr }, bpl
+    );
+    const size1 = encodeOutput(lines1).length;
+    if (best === 1 && size1 > targetOutputBytes) {
+      oversizedCount++;
+      if (size1 < minPossibleOutputBytes) minPossibleOutputBytes = size1;
+    }
+    chunkSizes.push(best);
+    offset += best;
+  }
+
+  const numParts = chunkSizes.length;
+  const parts = [];
+  let runningOffset = 0;
+  for (let idx = 0; idx < numParts; idx++) {
+    const len = chunkSizes[idx];
+    const isLast = idx === numParts - 1;
+    const chunkBytes = bytes.slice(runningOffset, runningOffset + len);
+    const chunkStartAddr = startAddr + runningOffset;
+    const { lines, tokens, chunkEndAddr } = renderLoaderPart(
+      deviceKey, chunkBytes, chunkStartAddr, memCheckEnabled, compressEnabled,
+      { memcheckLength: totalLength, callAddr: isLast ? startAddr : null }, bpl
+    );
+    parts.push({ partNum: idx + 1, numParts, lines, tokens, chunkBytes, chunkStartAddr, chunkEndAddr, isLast });
+    runningOffset += len;
+  }
+  parts.oversizedCount = oversizedCount;
+  parts.minPossibleOutputBytes = oversizedCount ? minPossibleOutputBytes : null;
+  return parts;
+}
+
 function portConfigText(deviceKey, eolName, termByte) {
   if (!PORT_CONFIG_DEVICES.has(deviceKey)) return null;
   if (termByte === null) {
-    return `${deviceKey} needs an end-of-program byte for this OPEN statement's <V2> parameter, ` +
+    return `${deviceKey} needs an end-of-program byte for this OPEN statement, ` +
       `but EOF BYTE is set to "none". Pick an actual byte (e.g. the default 1A) to get the OPEN statement.`;
   }
   const eolLetter = EOL_LETTER[eolName];
@@ -652,7 +753,8 @@ function portConfigText(deviceKey, eolName, termByte) {
     `Before sending the loader with TeraTerm, configure ${deviceKey}'s serial port to match the\n` +
     `EOL (${eolName}) / EOF (${v2}) settings above by running:\n\n` +
     `  OPEN "1200,N,8,1,A,${eolLetter},${v2}"\n\n` +
-    `<V1>=${eolLetter} (${eolWord} line terminator), <V2>=${v2} (end-of-program terminator).\n` +
+    `This opens the port at 1200 baud, no parity, 8 data bits, 1 stop bit, protocol A, with ${eolWord} as\n` +
+    `the line terminator and ${v2} as the end-of-program terminator.\n` +
     `Match TeraTerm's own serial setup (Setup > Serial port) to 1200 baud, 8N1, and send the\n` +
     `generated .txt file as-is — no newline translation, since the file already contains the exact\n` +
     `bytes above.`
@@ -745,6 +847,21 @@ function clearInput() {
 }
 
 // ── Generate ─────────────────────────────────────────────────────────────
+function encodeLoaderBytes(lines, eolBytes, termByte) {
+  const encoder = new TextEncoder();
+  const chunks = [];
+  for (const line of lines) {
+    chunks.push(encoder.encode(line));
+    chunks.push(new Uint8Array(eolBytes));
+  }
+  if (termByte !== null) chunks.push(new Uint8Array([termByte]));
+  const totalLen = chunks.reduce((n, c) => n + c.length, 0);
+  const out = new Uint8Array(totalLen);
+  let off = 0;
+  for (const c of chunks) { out.set(c, off); off += c.length; }
+  return out;
+}
+
 function generate() {
   outputArea.innerHTML = '';
   const errors = [];
@@ -774,64 +891,170 @@ function generate() {
   const deviceKey = deviceSel.value;
   const termByte  = termResult.value;
   const endAddr   = startAddr + fileBytes.length - 1;
-  const lines     = buildLoaderLines(deviceKey, startAddr, endAddr, memcheckOn, compressOn);
+  const eolBytes  = EOL_BYTES[eolName];
+  const splitBytes = parseInt(splitSel.value, 10);
+  const isSplit = splitBytes > 0 && splitBytes < fileBytes.length;
 
-  const tokens = compressOn ? encodeCompressedTokens(fileBytes) : Array.from(fileBytes);
+  if (!isSplit) {
+    loaderParts = null;
+    const { lines, tokens } = renderLoaderPart(deviceKey, fileBytes, startAddr, memcheckOn, compressOn, {}, bpl);
+    generatedBytes = encodeLoaderBytes(lines, eolBytes, termByte);
 
-  let dataLn = DATA_LINE_START;
-  for (let i = 0; i < tokens.length; i += bpl) {
-    const chunk = tokens.slice(i, i + bpl);
-    lines.push(`${dataLn} DATA ${chunk.join(',')}`);
-    dataLn += DATA_LINE_STEP;
+    // ── render summary ──
+    const sg = document.createElement('div');
+    sg.className = 'summary-grid';
+    const cells = [
+      ['DEVICE', deviceKey, 'orange'],
+      ['START', `&${hex(startAddr)}`, ''],
+      ['END', `&${hex(endAddr)}`, 'orange'],
+      ['BYTES', fileBytes.length.toString(), 'green'],
+      ['LINES', lines.length.toString(), ''],
+      ['EOL / EOF', `${eolName} / ${termByte !== null ? '&' + hex2(termByte) : 'NONE'}`, 'purple'],
+      ['MEM CHECK', memcheckOn ? 'ON' : 'OFF', memcheckOn ? 'green' : ''],
+      ['COMPRESS', compressOn ? `ON (${tokens.length} vs ${fileBytes.length})` : 'OFF', compressOn ? 'green' : ''],
+      ['SPLIT', 'OFF', ''],
+    ];
+    for (const [k, v, cls] of cells) {
+      const c = document.createElement('div');
+      c.className = 'summary-cell';
+      c.innerHTML = `<div class="summary-key">${k}</div><div class="summary-val ${cls}">${v}</div>`;
+      sg.appendChild(c);
+    }
+    outputArea.appendChild(sg);
+
+    // Shared blocks (serial port config + the carve-out POKEs that protect
+    // memory from BASIC) come BEFORE the loader listing: they're the steps
+    // you need to act on first, and burying them below a long DATA listing
+    // made them easy to miss.
+    appendSharedBlocks(deviceKey, startAddr, eolName, termByte);
+
+    // ── loader listing ──
+    const hdr1 = document.createElement('div');
+    hdr1.className = 'out-block-header';
+    hdr1.textContent = '; BASIC LOADER';
+    outputArea.appendChild(hdr1);
+    const code1 = document.createElement('div');
+    code1.className = 'out-code';
+    code1.textContent = lines.join('\n');
+    outputArea.appendChild(code1);
+
+    dlBtn.disabled = false;
+    dlBtn.textContent = '↓ LOADER TXT';
+    statPill.innerHTML = `${deviceKey} · ${lines.length} LINES · ${fileBytes.length} BYTES · &${hex(startAddr)}–&${hex(endAddr)}`;
+  } else {
+    const encodeOutput = (lines) => encodeLoaderBytes(lines, eolBytes, termByte);
+    const partList = splitIntoParts(deviceKey, fileBytes, startAddr, memcheckOn, compressOn, splitBytes, bpl, encodeOutput);
+    loaderParts = partList.map((part) => ({ ...part, bytes: encodeOutput(part.lines) }));
+
+    // ── render overall summary ──
+    const totalLines = loaderParts.reduce((n, p) => n + p.lines.length, 0);
+    const sg = document.createElement('div');
+    sg.className = 'summary-grid';
+    const cells = [
+      ['DEVICE', deviceKey, 'orange'],
+      ['START', `&${hex(startAddr)}`, ''],
+      ['END', `&${hex(endAddr)}`, 'orange'],
+      ['BYTES', fileBytes.length.toString(), 'green'],
+      ['LINES (ALL PARTS)', totalLines.toString(), ''],
+      ['EOL / EOF', `${eolName} / ${termByte !== null ? '&' + hex2(termByte) : 'NONE'}`, 'purple'],
+      ['MEM CHECK', memcheckOn ? 'ON' : 'OFF', memcheckOn ? 'green' : ''],
+      ['COMPRESS', compressOn ? 'ON' : 'OFF', compressOn ? 'green' : ''],
+      ['SPLIT', `${loaderParts.length} PARTS, ≤${splitBytes}B OUTPUT EACH`, 'green'],
+    ];
+    for (const [k, v, cls] of cells) {
+      const c = document.createElement('div');
+      c.className = 'summary-cell';
+      c.innerHTML = `<div class="summary-key">${k}</div><div class="summary-val ${cls}">${v}</div>`;
+      sg.appendChild(c);
+    }
+    outputArea.appendChild(sg);
+
+    if (partList.oversizedCount) {
+      const warn = document.createElement('div');
+      warn.className = 'out-error';
+      warn.textContent =
+        `⚠ ${partList.oversizedCount} of ${loaderParts.length} part(s) exceed the target anyway, even at ` +
+        `1 input byte each — the fixed overhead (memcheck + header lines) alone is already at least ` +
+        `${partList.minPossibleOutputBytes} bytes for ${deviceKey}, bigger than the ${splitBytes}-byte target. ` +
+        `Pick a larger SPLIT size, or turn MEM CHECK off, to get every part under target.`;
+      outputArea.appendChild(warn);
+    }
+
+    // ── how-to-load instructions ──
+    const hdrHow = document.createElement('div');
+    hdrHow.className = 'out-block-header orange';
+    hdrHow.textContent = '; HOW TO LOAD A SPLIT PROGRAM';
+    outputArea.appendChild(hdrHow);
+    const codeHow = document.createElement('div');
+    codeHow.className = 'out-code dim';
+    codeHow.textContent =
+      `This binary is being sent as ${loaderParts.length} separate loader programs since one loader was ` +
+      `too long. The carve-out and memory-protection check below are sized for the FULL ${fileBytes.length}-byte ` +
+      `program — do the carve-out ONCE for the whole thing before typing Part 1. Then for each part, in order:\n\n` +
+      `  1. Type or load the part and RUN it (it only POKEs its own byte range — it does NOT execute\n` +
+      `     the program until you reach the last part).\n` +
+      `  2. Run NEW to clear the BASIC program text. This does NOT erase the bytes you just POKEd —\n` +
+      `     NEW only clears the typed program listing, not general memory.\n` +
+      `  3. Move on to the next part and repeat.\n\n` +
+      `The LAST part (Part ${loaderParts.length} of ${loaderParts.length}) also CALLs the program after ` +
+      `POKEing its bytes, so running it executes the whole assembled program automatically — no separate ` +
+      `CALL step needed.`;
+    outputArea.appendChild(codeHow);
+
+    // Shared blocks (serial port config + carve-out POKEs) next, before the
+    // part listings — do these once, before typing Part 1, so they need to
+    // be visible before you scroll into the (potentially long) code below.
+    appendSharedBlocks(deviceKey, startAddr, eolName, termByte);
+
+    // ── one block per part ──
+    loaderParts.forEach((part) => {
+      const hdr = document.createElement('div');
+      hdr.className = 'out-block-header' + (part.isLast ? ' green' : '');
+      hdr.style.display = 'flex';
+      hdr.style.alignItems = 'center';
+      hdr.style.gap = '10px';
+      const label = document.createElement('span');
+      label.textContent = `; BASIC LOADER — PART ${part.partNum} OF ${part.numParts}` +
+        (part.isLast ? ' (CALLS & RUNS)' : ' (POKE ONLY)');
+      hdr.appendChild(label);
+      const dlPartBtn = document.createElement('button');
+      dlPartBtn.type = 'button';
+      dlPartBtn.className = 'btn btn-green';
+      dlPartBtn.style.marginLeft = 'auto';
+      dlPartBtn.style.fontSize = '10px';
+      dlPartBtn.textContent = `↓ PART ${part.partNum}`;
+      dlPartBtn.onclick = () => {
+        const blob = new Blob([part.bytes], { type: 'application/octet-stream' });
+        triggerDownload(blob, `${fileBaseName}_part${part.partNum}of${part.numParts}.txt`);
+      };
+      hdr.appendChild(dlPartBtn);
+      outputArea.appendChild(hdr);
+
+      const meta = document.createElement('div');
+      meta.className = 'out-code dim';
+      meta.style.padding = '4px 12px';
+      meta.textContent =
+        `&${hex(part.chunkStartAddr)}-&${hex(part.chunkEndAddr)} (${part.chunkBytes.length} bytes) · ` +
+        `${part.lines.length} lines · ${part.bytes.length} output bytes` +
+        (compressOn ? ` · ${part.tokens.length} DATA values` : '');
+      outputArea.appendChild(meta);
+
+      const code = document.createElement('div');
+      code.className = 'out-code';
+      code.textContent = part.lines.join('\n');
+      outputArea.appendChild(code);
+    });
+
+    dlBtn.disabled = false;
+    dlBtn.textContent = `↓ ALL ${loaderParts.length} PARTS`;
+    statPill.innerHTML = `${deviceKey} · ${loaderParts.length} PARTS · ${fileBytes.length} BYTES · &${hex(startAddr)}–&${hex(endAddr)}`;
   }
+}
 
-  // raw byte output for download
-  const encoder = new TextEncoder();
-  const chunks = [];
-  const eolBytes = EOL_BYTES[eolName];
-  for (const line of lines) {
-    chunks.push(encoder.encode(line));
-    chunks.push(new Uint8Array(eolBytes));
-  }
-  if (termByte !== null) chunks.push(new Uint8Array([termByte]));
-  const totalLen = chunks.reduce((n, c) => n + c.length, 0);
-  const out = new Uint8Array(totalLen);
-  let off = 0;
-  for (const c of chunks) { out.set(c, off); off += c.length; }
-  generatedBytes = out;
-
-  // ── render summary ──
-  const sg = document.createElement('div');
-  sg.className = 'summary-grid';
-  const cells = [
-    ['DEVICE', deviceKey, 'orange'],
-    ['START', `&${hex(startAddr)}`, ''],
-    ['END', `&${hex(endAddr)}`, 'orange'],
-    ['BYTES', fileBytes.length.toString(), 'green'],
-    ['LINES', lines.length.toString(), ''],
-    ['EOL / EOF', `${eolName} / ${termByte !== null ? '&' + hex2(termByte) : 'NONE'}`, 'purple'],
-    ['MEM CHECK', memcheckOn ? 'ON' : 'OFF', memcheckOn ? 'green' : ''],
-    ['COMPRESS', compressOn ? `ON (${tokens.length} vs ${fileBytes.length})` : 'OFF', compressOn ? 'green' : ''],
-  ];
-  for (const [k, v, cls] of cells) {
-    const c = document.createElement('div');
-    c.className = 'summary-cell';
-    c.innerHTML = `<div class="summary-key">${k}</div><div class="summary-val ${cls}">${v}</div>`;
-    sg.appendChild(c);
-  }
-  outputArea.appendChild(sg);
-
-  // ── loader listing ──
-  const hdr1 = document.createElement('div');
-  hdr1.className = 'out-block-header';
-  hdr1.textContent = '; BASIC LOADER';
-  outputArea.appendChild(hdr1);
-  const code1 = document.createElement('div');
-  code1.className = 'out-code';
-  code1.textContent = lines.join('\n');
-  outputArea.appendChild(code1);
-
-  // ── port config (PC-1350 / PC-1360 only) ──
+// Port-config + carve-out blocks are unaffected by split (both are sized
+// against the TOTAL binary, not any one part), so they're shared between
+// the split and non-split render paths.
+function appendSharedBlocks(deviceKey, startAddr, eolName, termByte) {
   const portText = portConfigText(deviceKey, eolName, termByte);
   if (portText) {
     const hdr2 = document.createElement('div');
@@ -844,7 +1067,6 @@ function generate() {
     outputArea.appendChild(code2);
   }
 
-  // ── carve-out instructions ──
   const hdr3 = document.createElement('div');
   hdr3.className = 'out-block-header green';
   hdr3.textContent = '; CARVE-OUT — PROTECT MEMORY FROM BASIC';
@@ -853,13 +1075,121 @@ function generate() {
   code3.className = 'out-code dim';
   code3.textContent = carveOutText(deviceKey, startAddr, fileBytes.length);
   outputArea.appendChild(code3);
+}
 
-  dlBtn.disabled = false;
-  statPill.innerHTML = `${deviceKey} · ${lines.length} LINES · ${fileBytes.length} BYTES · &${hex(startAddr)}–&${hex(endAddr)}`;
+// ── ZIP (store/no-compression) ──────────────────────────────────────────
+// Bundling all parts into one .zip lets "download all parts" trigger a
+// single browser download. Firing several separate downloads in a row (even
+// staggered with setTimeout) gets silently blocked after the first one by
+// Chrome/Firefox's automatic-download protection, since only the very first
+// call is still tied to the click's user gesture.
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) {
+      c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) {
+    crc = CRC32_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// entries: [{ name: string, data: Uint8Array }]
+function createZip(entries) {
+  const encoder = new TextEncoder();
+  const localChunks = [];
+  const centralChunks = [];
+  let offset = 0;
+
+  for (const entry of entries) {
+    const nameBytes = encoder.encode(entry.name);
+    const data = entry.data;
+    const crc = crc32(data);
+    const size = data.length;
+
+    const localHeader = new DataView(new ArrayBuffer(30));
+    localHeader.setUint32(0, 0x04034b50, true);
+    localHeader.setUint16(4, 20, true);
+    localHeader.setUint16(6, 0, true);
+    localHeader.setUint16(8, 0, true);
+    localHeader.setUint16(10, 0, true);
+    localHeader.setUint16(12, 0x21, true);
+    localHeader.setUint32(14, crc, true);
+    localHeader.setUint32(18, size, true);
+    localHeader.setUint32(22, size, true);
+    localHeader.setUint16(26, nameBytes.length, true);
+    localHeader.setUint16(28, 0, true);
+    const localHeaderBytes = new Uint8Array(localHeader.buffer);
+
+    localChunks.push(localHeaderBytes, nameBytes, data);
+
+    const centralHeader = new DataView(new ArrayBuffer(46));
+    centralHeader.setUint32(0, 0x02014b50, true);
+    centralHeader.setUint16(4, 20, true);
+    centralHeader.setUint16(6, 20, true);
+    centralHeader.setUint16(8, 0, true);
+    centralHeader.setUint16(10, 0, true);
+    centralHeader.setUint16(12, 0, true);
+    centralHeader.setUint16(14, 0x21, true);
+    centralHeader.setUint32(16, crc, true);
+    centralHeader.setUint32(20, size, true);
+    centralHeader.setUint32(24, size, true);
+    centralHeader.setUint16(28, nameBytes.length, true);
+    centralHeader.setUint16(30, 0, true);
+    centralHeader.setUint16(32, 0, true);
+    centralHeader.setUint16(34, 0, true);
+    centralHeader.setUint16(36, 0, true);
+    centralHeader.setUint32(38, 0, true);
+    centralHeader.setUint32(42, offset, true);
+    const centralHeaderBytes = new Uint8Array(centralHeader.buffer);
+
+    centralChunks.push(centralHeaderBytes, nameBytes);
+
+    offset += localHeaderBytes.length + nameBytes.length + data.length;
+  }
+
+  const centralOffset = offset;
+  const centralSize = centralChunks.reduce((n, c) => n + c.length, 0);
+
+  const eocd = new DataView(new ArrayBuffer(22));
+  eocd.setUint32(0, 0x06054b50, true);
+  eocd.setUint16(4, 0, true);
+  eocd.setUint16(6, 0, true);
+  eocd.setUint16(8, entries.length, true);
+  eocd.setUint16(10, entries.length, true);
+  eocd.setUint32(12, centralSize, true);
+  eocd.setUint32(16, centralOffset, true);
+  eocd.setUint16(20, 0, true);
+
+  const allChunks = [...localChunks, ...centralChunks, new Uint8Array(eocd.buffer)];
+  const totalLen = allChunks.reduce((n, c) => n + c.length, 0);
+  const out = new Uint8Array(totalLen);
+  let off = 0;
+  for (const c of allChunks) { out.set(c, off); off += c.length; }
+  return out;
 }
 
 // ── Download ─────────────────────────────────────────────────────────────
 function downloadLoader() {
+  if (loaderParts) {
+    const entries = loaderParts.map((part) => ({
+      name: `${fileBaseName}_part${part.partNum}of${part.numParts}.txt`,
+      data: part.bytes,
+    }));
+    const zipBytes = createZip(entries);
+    const blob = new Blob([zipBytes], { type: 'application/zip' });
+    triggerDownload(blob, `${fileBaseName}_parts.zip`);
+    return;
+  }
   if (!generatedBytes) return;
   const blob = new Blob([generatedBytes], { type: 'application/octet-stream' });
   triggerDownload(blob, fileBaseName + '.txt');
