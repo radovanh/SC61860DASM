@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC61860 Pointer Calculator — BASIC Pointer / LB-HB Tool</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<style>
+  :root {
+    --bg:       #0a0c10;
+    --panel:    #0f1319;
+    --border:   #1e2d3d;
+    --accent:   #00e5ff;
+    --accent2:  #ff6b35;
+    --green:    #39ff14;
+    --purple:   #c792ea;
+    --red:      #ff4444;
+    --dim:      #3a4a5a;
+    --text:     #c8d8e8;
+    --muted:    #5a7a8a;
+    --glow:     0 0 8px rgba(0,229,255,0.4);
+    --glow2:    0 0 8px rgba(57,255,20,0.3);
+    --glow3:    0 0 8px rgba(255,107,53,0.4);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.10) 2px, rgba(0,0,0,0.10) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  header {
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    background: linear-gradient(180deg, rgba(0,229,255,0.04) 0%, transparent 100%);
+    position: relative;
+    flex-wrap: wrap;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+    opacity: 0.45;
+  }
+  .logo {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900; font-size: 20px;
+    color: var(--accent); text-shadow: var(--glow);
+    letter-spacing: 2px; white-space: nowrap; text-decoration: none;
+  }
+  .logo span { color: var(--accent2); text-shadow: 0 0 8px rgba(255,107,53,0.5); }
+  .tagline { color: var(--muted); font-size: 11px; letter-spacing: 1px; }
+  .nav-back {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    color: var(--muted); text-decoration: none; letter-spacing: 1px;
+    border: 1px solid var(--dim); padding: 5px 12px; border-radius: 2px;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .nav-back:hover { color: var(--accent); border-color: var(--accent); }
+  .badge {
+    margin-left: auto; font-size: 11px; color: var(--muted);
+    text-align: right; line-height: 1.6;
+  }
+  .badge em { color: var(--accent2); font-style: normal; }
+
+  main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    max-width: 1180px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 24px 28px 60px;
+    gap: 22px;
+  }
+
+  h2.section-title {
+    font-family: 'Orbitron', monospace; font-size: 12px; font-weight: 700;
+    color: var(--muted); letter-spacing: 2px; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid var(--border); padding-bottom: 8px;
+  }
+  h2.section-title .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent2); box-shadow: var(--glow3); flex-shrink: 0;
+  }
+  h2.section-title .dot.green { background: var(--green); box-shadow: var(--glow2); }
+
+  /* ── panel / card shell ── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 18px 20px;
+  }
+
+  /* ── form controls ── */
+  .field-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+  .fieldset { display: grid; gap: 6px; }
+  label { font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
+  .small-input {
+    padding: 8px 10px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; border-radius: 2px; outline: none; transition: border-color 0.15s;
+  }
+  .small-input:focus { border-color: var(--accent); }
+  select.small-input { min-width: 240px; }
+  .addr-input { width: 90px; text-align: center; }
+  .num-input { width: 110px; }
+  .hint { font-size: 10px; color: var(--muted); letter-spacing: 0.5px; line-height: 1.5; max-width: 46ch; }
+
+  .file-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 14px;
+  }
+  .file-grid .fieldset { gap: 5px; }
+
+  /* confirmed / unconfirmed badge on the config note */
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-family: 'Orbitron', monospace; font-size: 9px; font-weight: 700;
+    letter-spacing: 1px; padding: 3px 8px; border-radius: 2px;
+    text-transform: uppercase; white-space: nowrap;
+  }
+  .pill.ok   { color: var(--green);  border: 1px solid rgba(57,255,20,0.5);  background: rgba(57,255,20,0.08); }
+  .pill.warn { color: var(--accent2); border: 1px solid rgba(255,107,53,0.5); background: rgba(255,107,53,0.08); }
+
+  .config-note { display: flex; align-items: flex-start; gap: 10px; margin-top: 10px; font-size: 11px; color: var(--muted); line-height: 1.6; }
+
+  /* ── summary grid (results) ── */
+  /* Fixed column counts (not auto-fit) so the 8-cell grid always divides
+     evenly — auto-fit left a leftover partial row with unfilled, oddly
+     colored track space when the item count didn't match the row width. */
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 1px; background: var(--border); border: 1px solid var(--border);
+    border-radius: 2px; overflow: hidden;
+  }
+  @media (max-width: 760px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 420px) { .summary-grid { grid-template-columns: 1fr; } }
+  .summary-cell { background: var(--panel); padding: 12px 16px; }
+  .summary-key { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 5px; }
+  .summary-val { font-size: 15px; color: var(--accent); font-family: 'Orbitron', monospace; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .summary-val.orange { color: var(--accent2); }
+  .summary-val.green  { color: var(--green); }
+  .summary-val.purple { color: var(--purple); }
+  .summary-val.red    { color: var(--red); }
+
+  /* ── formula strip ── */
+  .formula {
+    font-family: 'Share Tech Mono', monospace; font-size: 14px;
+    color: var(--text); background: var(--bg); border: 1px solid var(--border);
+    border-radius: 2px; padding: 14px 18px; letter-spacing: 0.3px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .formula .op { color: var(--muted); }
+  .formula .lb { color: var(--accent); }
+  .formula .hb { color: var(--accent2); }
+  .formula .eq { color: var(--green); font-weight: bold; }
+
+  /* ── cascade table ── */
+  .table-wrap { overflow-x: auto; }
+  table.cascade { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 560px; }
+  table.cascade th {
+    text-align: left; font-family: 'Orbitron', monospace; font-size: 10px;
+    letter-spacing: 1px; text-transform: uppercase; color: var(--muted);
+    padding: 7px 12px; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  table.cascade td {
+    padding: 7px 12px; border-bottom: 1px solid rgba(30,45,61,0.5);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  table.cascade tr.margin-row td { color: var(--muted); font-style: italic; }
+  table.cascade tr.final-row td { color: var(--green); font-weight: bold; border-top: 1px solid var(--border); }
+  table.cascade td.addr { color: var(--accent2); }
+  table.cascade td.hexv { color: var(--accent); }
+
+  /* ── poke code block ── */
+  .out-code {
+    font-family: 'Share Tech Mono', monospace; white-space: pre-wrap;
+    color: var(--text); font-size: 13px; line-height: 1.8; letter-spacing: 0.3px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 2px;
+    padding: 14px 16px;
+  }
+  .out-code .rem { color: var(--muted); }
+
+  .out-error { color: var(--red); font-size: 12px; padding: 6px 0; }
+  .out-warn  { color: var(--accent2); font-size: 12px; padding: 6px 0; }
+
+  .btn {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; padding: 0 15px; border: 1px solid currentColor;
+    background: transparent; cursor: pointer; border-radius: 2px;
+    transition: all 0.2s; text-transform: uppercase; white-space: nowrap;
+    height: 30px; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-green  { color: var(--green); border-color: var(--green); }
+  .btn-green:hover { background: rgba(57,255,20,0.08); box-shadow: var(--glow2); }
+  .btn-secondary { color: var(--muted); border-color: var(--dim); }
+  .btn-secondary:hover { color: var(--text); border-color: var(--muted); }
+  .btn:focus-visible, .small-input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .row-actions { display: flex; gap: 10px; align-items: center; }
+  .copy-msg { font-size: 10px; color: var(--green); letter-spacing: 1px; opacity: 0; transition: opacity 0.2s; }
+  .copy-msg.show { opacity: 1; }
+
+  footer {
+    flex-shrink: 0; border-top: 1px solid var(--border);
+    padding: 12px 28px; font-size: 10px; color: var(--muted);
+    letter-spacing: 0.5px; text-align: center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header>
+  <a class="logo" href="index.html">SC<span>61860</span></a>
+  <div>
+    <div style="font-family:'Orbitron',monospace;font-size:13px;font-weight:700;color:var(--accent2);letter-spacing:2px">POINTER CALCULATOR</div>
+    <div class="tagline">DEFAULT ADDRESS + FILES + MARGIN → NEW BASIC POINTER (LB / HB)</div>
+  </div>
+  <a class="nav-back" href="index.html">← INDEX</a>
+  <div class="badge">
+    <em>PC-1401 / 1403 / 1403H / 1350 / 1360</em><br>
+    reserve space for up to 5 binaries before loading
+  </div>
+</header>
+
+<main>
+
+  <section class="panel">
+    <h2 class="section-title"><span class="dot"></span>1 · DEVICE &amp; DEFAULT ADDRESS</h2>
+    <div class="field-row" style="margin-top:16px">
+      <div class="fieldset">
+        <label for="device-sel">Device</label>
+        <select id="device-sel" class="small-input"></select>
+      </div>
+      <div class="fieldset">
+        <label for="config-sel">Memory configuration</label>
+        <select id="config-sel" class="small-input"></select>
+      </div>
+      <div class="fieldset">
+        <label for="default-addr">Default pointer (hex)</label>
+        <input id="default-addr" class="small-input addr-input" type="text" oninput="onDefaultAddrEdit()">
+      </div>
+      <div class="fieldset">
+        <label for="top-addr">Top of user memory (hex, optional)</label>
+        <input id="top-addr" class="small-input addr-input" type="text" placeholder="none" oninput="onTopAddrEdit()">
+      </div>
+    </div>
+    <div class="config-note" id="config-note"></div>
+    <div class="config-note" id="top-note"></div>
+  </section>
+
+  <section class="panel">
+    <h2 class="section-title"><span class="dot"></span>2 · BINARY SIZES &amp; SAFETY MARGIN</h2>
+    <div class="file-grid" style="margin-top:16px">
+      <div class="fieldset">
+        <label for="file-1">File 1 (bytes)</label>
+        <input id="file-1" class="small-input num-input" type="text" placeholder="0" inputmode="numeric">
+      </div>
+      <div class="fieldset">
+        <label for="file-2">File 2 (bytes)</label>
+        <input id="file-2" class="small-input num-input" type="text" placeholder="0" inputmode="numeric">
+      </div>
+      <div class="fieldset">
+        <label for="file-3">File 3 (bytes)</label>
+        <input id="file-3" class="small-input num-input" type="text" placeholder="0" inputmode="numeric">
+      </div>
+      <div class="fieldset">
+        <label for="file-4">File 4 (bytes)</label>
+        <input id="file-4" class="small-input num-input" type="text" placeholder="0" inputmode="numeric">
+      </div>
+      <div class="fieldset">
+        <label for="file-5">File 5 (bytes)</label>
+        <input id="file-5" class="small-input num-input" type="text" placeholder="0" inputmode="numeric">
+      </div>
+      <div class="fieldset">
+        <label for="margin-in">Safety margin (bytes)</label>
+        <input id="margin-in" class="small-input num-input" type="text" placeholder="0" inputmode="numeric" value="0">
+      </div>
+    </div>
+    <div class="hint" style="margin-top:12px">Leave a file blank or 0 to skip it. Sizes accept decimal (e.g. 512) or hex with a leading &amp; or 0x (e.g. &amp;200). Files are reserved in order, 1 → 5, immediately followed by the safety margin.</div>
+    <div id="input-errors"></div>
+  </section>
+
+  <section class="panel">
+    <h2 class="section-title"><span class="dot green"></span>3 · RESULT</h2>
+    <div id="result-body" style="margin-top:16px; display:flex; flex-direction:column; gap:20px;"></div>
+  </section>
+
+</main>
+
+<footer>
+  Pointer storage addresses and default free-memory addresses come from on-device testing where marked CONFIRMED — verify UNCONFIRMED values against your own hardware before relying on them.
+</footer>
+
+<script>
+// ── Device data ──────────────────────────────────────────────────────────
+// pointer.lo / pointer.hi: the RAM addresses BASIC itself reads to know
+// where free memory starts (the two bytes you POKE to move the pointer).
+// configs[].addr: the DEFAULT VALUE of that pointer for the given
+// device/memory configuration — i.e. where free memory starts before you
+// reserve anything. Reused from the SC61860 Loader Generator's DEVICES
+// table (same project), extended with PC-1360's MEM$ B/C split and
+// PC-1403H, plus an optional top-of-user-memory ceiling per config.
+//
+// configs[].top / topConfirmed / topNote: the LAST address still inside
+// user-writable RAM for that config, used only to warn if the new pointer's
+// reserved region runs past available memory. Left undefined where there's
+// no basis for a number at all — the UI then simply skips that check.
+// Where a `top` IS given but topConfirmed is false, it's a best-effort
+// estimate (see topNote for how it was derived) — verify before relying on
+// it, same as any other UNCONFIRMED value here.
+const DEVICES = {
+  'PC-1401': {
+    pointer: { lo: 0x46e1, hi: 0x46e2 },
+    configs: [
+      { id: 'std', label: 'Standard (&3800)', addr: 0x3800, confirmed: true,
+        note: 'Fixed conventional free-memory start address.' },
+    ],
+  },
+  'PC-1403': {
+    pointer: { lo: 0xff01, hi: 0xff02 },
+    configs: [
+      { id: 'std', label: 'Standard (&E038)', addr: 0xe038, confirmed: true,
+        note: 'Fixed conventional free-memory start address.',
+        top: 0xfb15, topConfirmed: false,
+        topNote: 'Estimated from a single unverified hobbyist source citing 6878 bytes free after reset (&E038 + 6878 − 1 = &FB15) — not cross-checked against a technical reference manual.' },
+    ],
+  },
+  'PC-1403H': {
+    pointer: { lo: 0xff01, hi: 0xff02 },
+    configs: [
+      { id: 'std', label: 'Standard (&8030)', addr: 0x8030, confirmed: true,
+        note: "Confirmed on your own PC-1403H hardware. (Pointer storage address &FF01/&FF02 is still inherited from PC-1403, not independently confirmed for PC-1403H.)",
+        top: 0xf915, topConfirmed: false,
+        topNote: 'Estimated from a single unverified hobbyist source citing 30950 bytes free after reset (&8030 + 30950 − 1 = &F915) — this now fits cleanly under &FFFF with your confirmed &8030 default (the earlier &E038 placeholder made this figure impossible). The 30950-byte count itself is still unverified.' },
+    ],
+  },
+  'PC-1350': {
+    pointer: { lo: 0x6f01, hi: 0x6f02 },
+    flagByte: 0x6f00,
+    configs: [
+      { id: 'nocard', label: 'No RAM card (&6000)', addr: 0x6000, confirmed: true,
+        note: 'Internal-only user memory area — the no-card case.' },
+      { id: 'card2000', label: 'RAM card, base &2000', addr: 0x2000, confirmed: true,
+        note: 'Flag byte &6F00 selects this base — confirm it matches your card.' },
+      { id: 'card4000', label: 'RAM card, base &4000', addr: 0x4000, confirmed: true,
+        note: 'Flag byte &6F00 selects this base — confirm it matches your card.' },
+    ],
+  },
+  'PC-1360': {
+    pointer: { lo: 0xffd7, hi: 0xffd8 },
+    configs: [
+      { id: 'card8k-C', label: '8 KB card, MEM$ C (&E030)', addr: 0xe030, confirmed: true,
+        note: 'Confirmed on real hardware.',
+        top: 0xffcf, topConfirmed: false,
+        topNote: 'Derived, not sourced: &E030 + nominal 8192 bytes − 1 lands 48 bytes past &FFFF, and the same 48-byte overshoot shows up for the 16K and 32K cards below too — consistent with a real ceiling of &FFCF for all three (48 bytes reserved below the &FFD7/&FFD8 pointer storage). Unconfirmed — verify on hardware.' },
+      { id: 'card8k-B', label: '8 KB card, MEM$ B (&A030)', addr: 0xa030, confirmed: true,
+        note: 'Confirmed on real hardware.',
+        top: 0xffcf, topConfirmed: false,
+        topNote: 'Same derived estimate as MEM$ C above (card size, not MEM$ mode, drives this figure) — unconfirmed.' },
+      { id: 'card16k', label: '16 KB card (&C030)', addr: 0xc030, confirmed: false,
+        note: 'MEM$ B/C split not confirmed for this card size yet — if you have two cards fitted, double-check this address for your actual MEM$ mode before relying on it.',
+        top: 0xffcf, topConfirmed: false,
+        topNote: '&C030 + nominal 16384 bytes − 1 also lands exactly 48 bytes past &FFFF — same derived &FFCF ceiling as the 8K card. Unconfirmed — verify on hardware.' },
+      { id: 'card32k', label: '32 KB card (&8030)', addr: 0x8030, confirmed: false,
+        note: 'MEM$ B/C split not confirmed for this card size yet — if you have two cards fitted, double-check this address for your actual MEM$ mode before relying on it.',
+        top: 0xffcf, topConfirmed: false,
+        topNote: '&8030 + nominal 32768 bytes − 1 also lands exactly 48 bytes past &FFFF — same derived &FFCF ceiling as the 8K card. Unconfirmed — verify on hardware.' },
+    ],
+  },
+};
+
+const hex  = (n) => n.toString(16).toUpperCase();
+const hex2 = (n) => n.toString(16).toUpperCase().padStart(2, '0');
+const hex4 = (n) => n.toString(16).toUpperCase().padStart(4, '0');
+
+const deviceSel   = document.getElementById('device-sel');
+const configSel   = document.getElementById('config-sel');
+const defaultAddrEl = document.getElementById('default-addr');
+const configNoteEl = document.getElementById('config-note');
+const topAddrEl   = document.getElementById('top-addr');
+const topNoteEl   = document.getElementById('top-note');
+const marginEl    = document.getElementById('margin-in');
+const fileEls     = [1,2,3,4,5].map(n => document.getElementById('file-' + n));
+const inputErrorsEl = document.getElementById('input-errors');
+const resultBody  = document.getElementById('result-body');
+
+let addrManuallyEdited = false;
+let topManuallyEdited = false;
+
+// ── Device / config wiring ─────────────────────────────────────────────
+function populateDevices() {
+  deviceSel.innerHTML = Object.keys(DEVICES).map(k => `<option value="${k}">${k}</option>`).join('');
+}
+function onDeviceChange() {
+  const dev = DEVICES[deviceSel.value];
+  configSel.innerHTML = dev.configs.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
+  addrManuallyEdited = false;
+  topManuallyEdited = false;
+  applyConfig();
+}
+function currentConfig() {
+  const dev = DEVICES[deviceSel.value];
+  return dev.configs.find(c => c.id === configSel.value) || dev.configs[0];
+}
+function onConfigChange() {
+  addrManuallyEdited = false;
+  topManuallyEdited = false;
+  applyConfig();
+}
+function applyConfig() {
+  const cfg = currentConfig();
+  if (!addrManuallyEdited) defaultAddrEl.value = hex(cfg.addr);
+  if (!topManuallyEdited) topAddrEl.value = cfg.top !== undefined ? hex(cfg.top) : '';
+  renderConfigNote(cfg);
+  renderTopNote(cfg);
+  compute();
+}
+function onDefaultAddrEdit() {
+  addrManuallyEdited = true;
+  compute();
+}
+function onTopAddrEdit() {
+  topManuallyEdited = true;
+  renderTopNote(currentConfig());
+  compute();
+}
+function renderConfigNote(cfg) {
+  const pillClass = cfg.confirmed ? 'ok' : 'warn';
+  const pillText = cfg.confirmed ? 'Confirmed' : 'Unconfirmed — verify';
+  configNoteEl.innerHTML =
+    `<span class="pill ${pillClass}">${pillText}</span><span>${cfg.note || ''}</span>`;
+}
+function renderTopNote(cfg) {
+  // Once the user has typed their own top-of-memory value, the config's
+  // canned note (which describes OUR estimate) no longer describes what's
+  // in the field, so stop showing it.
+  if (topManuallyEdited) {
+    topNoteEl.innerHTML = `<span class="pill warn">User-supplied</span><span>Range checked against the value you entered above — not from the built-in table.</span>`;
+    return;
+  }
+  if (cfg.top === undefined) {
+    topNoteEl.innerHTML = `<span>${cfg.topNote || 'No top-of-memory figure known for this configuration — range isn\'t checked. Enter one above if you have it.'}</span>`;
+    return;
+  }
+  const pillClass = cfg.topConfirmed ? 'ok' : 'warn';
+  const pillText = cfg.topConfirmed ? 'Confirmed' : 'Unconfirmed — verify';
+  topNoteEl.innerHTML = `<span class="pill ${pillClass}">${pillText}</span><span>${cfg.topNote || ''}</span>`;
+}
+
+// ── Parsing ──────────────────────────────────────────────────────────────
+// Accepts plain decimal ("512"), or hex with an & or 0x prefix ("&200",
+// "0x200"). Blank counts as 0. Returns NaN on anything else so the caller
+// can flag it as an error rather than silently treating garbage as 0.
+function parseSizeInput(str) {
+  const s = (str || '').trim();
+  if (s === '') return 0;
+  if (/^&[0-9a-fA-F]+$/.test(s)) return parseInt(s.slice(1), 16);
+  if (/^0x[0-9a-fA-F]+$/i.test(s)) return parseInt(s.slice(2), 16);
+  if (/^[0-9]+$/.test(s)) return parseInt(s, 10);
+  return NaN;
+}
+function parseHexAddrInput(str) {
+  const cleaned = (str || '').trim().replace(/^&/, '').replace(/^0x/i, '');
+  if (!/^[0-9a-fA-F]+$/.test(cleaned)) return NaN;
+  return parseInt(cleaned, 16);
+}
+
+// ── Compute & render ─────────────────────────────────────────────────────
+function compute() {
+  const errors = [];
+
+  const defaultAddr = parseHexAddrInput(defaultAddrEl.value);
+  if (!Number.isFinite(defaultAddr)) errors.push('Default pointer address must be hex, e.g. E038 or &E038.');
+
+  const fileLabels = ['File 1', 'File 2', 'File 3', 'File 4', 'File 5'];
+  const sizes = fileEls.map((el, i) => {
+    const v = parseSizeInput(el.value);
+    if (!Number.isFinite(v)) { errors.push(`${fileLabels[i]}: expected a decimal or hex byte count, e.g. 512 or &200.`); return 0; }
+    if (v < 0) { errors.push(`${fileLabels[i]}: size can't be negative.`); return 0; }
+    return v;
+  });
+
+  const margin = (() => {
+    const v = parseSizeInput(marginEl.value);
+    if (!Number.isFinite(v)) { errors.push('Safety margin: expected a decimal or hex byte count, e.g. 32 or &20.'); return 0; }
+    if (v < 0) { errors.push("Safety margin can't be negative."); return 0; }
+    return v;
+  })();
+
+  // Top-of-memory is optional: blank means "don't range-check". Only flag
+  // it as an error if the user (or the table) put something non-blank in
+  // there that isn't valid hex.
+  let topAddr = null;
+  const topRaw = (topAddrEl.value || '').trim();
+  if (topRaw !== '') {
+    const v = parseHexAddrInput(topRaw);
+    if (!Number.isFinite(v)) errors.push('Top of user memory must be hex, e.g. FB15 or &FB15, or left blank.');
+    else topAddr = v;
+  }
+
+  inputErrorsEl.innerHTML = errors.map(e => `<div class="out-error">⚠ ${e}</div>`).join('');
+  if (!Number.isFinite(defaultAddr)) { resultBody.innerHTML = ''; return; }
+
+  const dev = DEVICES[deviceSel.value];
+  const p = dev.pointer;
+
+  // Cascade: each non-zero file occupies the next slice above the running
+  // cursor, in order 1→5; the safety margin is reserved right after the
+  // last file. The final cursor position is the new BASIC pointer value.
+  let cursor = defaultAddr;
+  const rows = [];
+  sizes.forEach((size, i) => {
+    if (size <= 0) return;
+    const start = cursor;
+    const end = start + size - 1;
+    rows.push({ label: fileLabels[i], size, start, end });
+    cursor = end + 1;
+  });
+  const filesTotal = sizes.reduce((a, b) => a + b, 0);
+  const afterFiles = cursor;
+  const newPointer = cursor + margin;
+  const totalReserved = filesTotal + margin;
+  const overflow = newPointer > 0xFFFF;
+
+  const lb = newPointer & 0xFF;
+  const hb = (newPointer >> 8) & 0xFF;
+
+  // Range check against top-of-memory, when we have one: the last byte
+  // actually reserved is newPointer-1 (newPointer itself is the address
+  // AFTER the reserved region, i.e. the new free-memory start).
+  const lastReservedByte = newPointer - 1;
+  const outOfRange = topAddr !== null && lastReservedByte > topAddr;
+  const headroom = topAddr !== null ? topAddr - lastReservedByte : null;
+
+  renderResult({ defaultAddr, rows, margin, afterFiles, newPointer, totalReserved, overflow, lb, hb, p, dev, topAddr, outOfRange, headroom, lastReservedByte });
+}
+
+function renderResult(r) {
+  const parts = [];
+
+  if (r.overflow) {
+    parts.push(`<div class="out-error">⚠ New pointer &${hex(r.newPointer)} (${r.newPointer}) exceeds &FFFF — total reserved space (${r.totalReserved} bytes) overruns the 16-bit address space from this default address. Reduce the sizes/margin or pick a lower default address.</div>`);
+  } else if (r.outOfRange) {
+    parts.push(`<div class="out-error">⚠ Reserved region ends at &${hex(r.lastReservedByte)}, ${Math.abs(r.headroom)} byte(s) past the top of user memory &${hex(r.topAddr)} you set above. Reduce the sizes/margin, or double-check that top-of-memory figure.</div>`);
+  } else if (r.topAddr !== null && r.totalReserved > 0) {
+    parts.push(`<div class="hint" style="max-width:none">Within user memory: &${hex(r.headroom)} (${r.headroom}) byte(s) of headroom left below &${hex(r.topAddr)}.</div>`);
+  }
+
+  // Summary grid
+  const cells = [
+    ['Device', deviceSel.value, ''],
+    ['Default pointer', `&${hex(r.defaultAddr)}`, ''],
+    ['Files reserved', `${r.rows.length} / 5`, 'purple'],
+    ['Files total', `${r.rows.reduce((a,x)=>a+x.size,0)} B`, 'orange'],
+    ['Safety margin', `${r.margin} B`, 'orange'],
+    ['Total reserved', `${r.totalReserved} B`, r.overflow ? 'red' : ''],
+    ['New pointer', `&${hex(r.newPointer)} (${r.newPointer})`, r.overflow ? 'red' : (r.outOfRange ? 'red' : 'green')],
+    ['Headroom', r.topAddr !== null ? `${r.headroom} B` : '—', r.topAddr === null ? '' : (r.outOfRange ? 'red' : 'green')],
+  ];
+  const grid = `<div class="summary-grid">${cells.map(([k,v,c]) =>
+    `<div class="summary-cell"><div class="summary-key">${k}</div><div class="summary-val ${c}">${v}</div></div>`
+  ).join('')}</div>`;
+  parts.push(grid);
+
+  // LB/HB formula
+  const formula = `<div class="formula">
+    <span>&${hex(r.newPointer)}</span><span class="op">=</span>
+    <span class="eq">${r.newPointer}</span><span class="op">=</span>
+    <span class="lb">LB ${r.lb}</span><span class="op">+ 256 ×</span><span class="hb">HB ${r.hb}</span>
+    <span class="op">→</span>
+    <span class="lb">LB = &${hex2(r.lb)} (${r.lb})</span><span class="op">·</span>
+    <span class="hb">HB = &${hex2(r.hb)} (${r.hb})</span>
+  </div>`;
+  parts.push(formula);
+
+  // Cascade table
+  let tableRows = r.rows.map(row =>
+    `<tr><td>${row.label}</td><td>${row.size} B</td><td class="addr">&${hex(row.start)}</td><td class="addr">&${hex(row.end)}</td><td class="hexv">${row.start}–${row.end}</td></tr>`
+  ).join('');
+  if (r.margin > 0) {
+    tableRows += `<tr class="margin-row"><td>Safety margin</td><td>${r.margin} B</td><td class="addr">&${hex(r.afterFiles)}</td><td class="addr">&${hex(r.newPointer - 1)}</td><td class="hexv">${r.afterFiles}–${r.newPointer - 1}</td></tr>`;
+  }
+  tableRows += `<tr class="final-row"><td colspan="4">New BASIC pointer</td><td class="hexv">&${hex(r.newPointer)} (${r.newPointer})</td></tr>`;
+
+  const table = r.rows.length || r.margin > 0
+    ? `<div class="table-wrap"><table class="cascade">
+        <thead><tr><th>Region</th><th>Size</th><th>Start</th><th>End</th><th>Range</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table></div>`
+    : `<div class="hint">Enter at least one file size (or a margin) to see the address cascade.</div>`;
+  parts.push(table);
+
+  // POKE code block
+  const poke =
+`; Raise ${deviceSel.value}'s BASIC pointer from &${hex(r.defaultAddr)} to &${hex(r.newPointer)}
+; — reserves &${hex(r.defaultAddr)}-&${hex(r.newPointer - 1)} (${r.totalReserved} bytes) so BASIC never writes into it.
+POKE &${hex(r.p.lo)},${r.lb}
+POKE &${hex(r.p.hi)},${r.hb}
+<span class="rem">; assumes little-endian pointer bytes: &${hex(r.p.lo)}=LB, &${hex(r.p.hi)}=HB —
+; flip the two POKE values if that turns out backwards on real hardware.</span>`;
+  parts.push(`
+    <div>
+      <div class="row-actions" style="margin-bottom:8px">
+        <button type="button" class="btn btn-green" onclick="copyPoke()">↳ Copy POKE lines</button>
+        <span class="copy-msg" id="copy-msg">COPIED</span>
+      </div>
+      <div class="out-code" id="poke-block">${poke}</div>
+    </div>
+  `);
+
+  if (deviceSel.value === 'PC-1350' && DEVICES['PC-1350'].flagByte !== undefined) {
+    parts.push(`<div class="hint">Note: flag byte &${hex(DEVICES['PC-1350'].flagByte)} selects PC-1350's RAM-card base (&2000/&4000) vs. no-card (&6000) — make sure the memory configuration above matches your actual card.</div>`);
+  }
+
+  resultBody.innerHTML = parts.join('');
+}
+
+function copyPoke() {
+  const block = document.getElementById('poke-block');
+  const text = block.innerText;
+  const msg = document.getElementById('copy-msg');
+  const show = () => { msg.classList.add('show'); setTimeout(() => msg.classList.remove('show'), 1400); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(show).catch(show);
+  } else {
+    show();
+  }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────
+deviceSel.addEventListener('change', onDeviceChange);
+configSel.addEventListener('change', onConfigChange);
+marginEl.addEventListener('input', compute);
+fileEls.forEach(el => el.addEventListener('input', compute));
+
+populateDevices();
+onDeviceChange();
+</script>
+</body>
+</html>
