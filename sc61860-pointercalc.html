@@ -328,6 +328,10 @@
 // ── Device data ──────────────────────────────────────────────────────────
 // pointer.lo / pointer.hi: the RAM addresses BASIC itself reads to know
 // where free memory starts (the two bytes you POKE to move the pointer).
+// These match the SC61860 Loader Generator's DEVICES table exactly — you
+// confirmed these are the correct, tested values. (sc61860-memmap.html's
+// "Program Start Pointer" entries for PC-1401/1403/1350 list different
+// addresses; that's a bug in memmap, not here — see sc61860-memmap.html.)
 // configs[].addr: the DEFAULT VALUE of that pointer for the given
 // device/memory configuration — i.e. where free memory starts before you
 // reserve anything. Reused from the SC61860 Loader Generator's DEVICES
