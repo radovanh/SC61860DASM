@@ -207,8 +207,23 @@
     color: var(--error); font-size: 12px; padding: 8px 12px; border-radius: 2px; margin-bottom: 14px;
   }
   .halt-banner.show { display: block; }
-  .reg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap: 8px; margin-bottom: 18px; }
-  .reg-cell { background: var(--panel2); border: 1px solid var(--border); border-radius: 2px; padding: 7px 10px; }
+  .regs-row { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 18px; flex-wrap: wrap; }
+  .reg-grid { flex: 1 1 260px; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(88px,1fr)); gap: 6px; }
+  .reg-cell { background: var(--panel2); border: 1px solid var(--border); border-radius: 2px; padding: 6px 8px; }
+  /* ── POINTERS (value at the address each pointer register holds) ── */
+  .ptr-block { flex: 0 0 auto; background: var(--panel2); border: 1px solid var(--border); border-radius: 2px; padding: 6px 4px 4px; }
+  .ptr-title { font-size: 9px; color: var(--muted); letter-spacing: 1.5px; padding: 0 6px 4px; border-bottom: 1px solid var(--border); margin-bottom: 3px; }
+  .ptr-row { display: grid; grid-template-columns: 22px 44px 14px 28px 58px; align-items: baseline; padding: 2px 6px; font-size: 12px; line-height: 1.5; cursor: pointer; border-radius: 2px; white-space: nowrap; }
+  .ptr-row:hover { background: rgba(0,229,255,0.08); }
+  .ptr-row .pn  { color: var(--muted); font-size: 10px; letter-spacing: 1px; }
+  .ptr-row .pa  { color: var(--accent); }
+  .ptr-row .par { color: var(--dim); text-align: center; }
+  .ptr-row .pv  { color: var(--green); }
+  .ptr-row .pt  { color: var(--purple); font-size: 10px; }
+  .ptr-row .pnx { color: var(--muted); font-size: 10px; }
+  .ptr-row .pnx b { color: var(--text); font-weight: normal; }
+  .ptr-row .chg { color: var(--yellow); text-shadow: 0 0 6px rgba(232,216,122,0.5); }
+  .ptr-row .na  { color: var(--dim); }
   .reg-cell .rn { font-size: 9px; color: var(--muted); letter-spacing: 1.5px; }
   .reg-cell .rv { font-size: 14px; color: var(--accent); font-family: 'Orbitron', monospace; }
   .reg-cell .rv .dec { color: var(--muted); font-size: 10px; margin-left: 4px; }
@@ -343,7 +358,10 @@
       <div class="pane-header"><div class="dot"></div>REGISTERS</div>
       <div id="regs-body">
         <div class="halt-banner" id="halt-banner"></div>
-        <div class="reg-grid" id="reg-grid"></div>
+        <div class="regs-row">
+          <div class="ptr-block" id="ptr-block"></div>
+          <div class="reg-grid" id="reg-grid"></div>
+        </div>
         <div class="flags-row" id="flags-row"></div>
         <div class="rom-disclaimer">
           <em>ROM STUBS:</em> calls into PC-1401 ROM addresses (e.g. $8040 DISP_CHAR, $8080 READ_KEY)
@@ -817,7 +835,7 @@ const OPCODES = {
 
   0x30:['STP', 0,'none','A→P'],       0x31:['STQ', 0,'none','A→Q'],
   0x32:['STR', 0,'none','A→R'],       0x33:['STH', 0,'none','A→H [undoc]'],
-  0x34:['PUSH',0,'none','A→(R), R-1→R'],
+  0x34:['PUSH',0,'none','R-1→R, A→(R)'],
   0x35:['DATA',0,'none','(BA)→(P) [I+1 bytes]'],
   0x36:['???', 0,'none','unknown'],
   0x37:['RTN', 0,'none','pop return addr → PC'],
@@ -1121,13 +1139,16 @@ function defExec(op, fn) { EXEC[op] = fn; }
 
 // -- CALL/RTN/CAL: self-consistent stack convention (predecrement-then-
 // store on call, load-then-postincrement on return through R+1/R+2) --
+// Stack model (matches MAME sc61860 core): R points AT the top-of-stack byte.
+// push = R-1→R, value→(R);  pop = (R)→value, R+1→R.
+// CALL pushes PC high byte first, then low byte → low at (R), high at (R+1).
 function pushReturn(ret) {
   cpu.R = (cpu.R - 2) & 0xFF;
+  mem[cpu.R & 0xFF]       = ret & 0xFF;
   mem[(cpu.R + 1) & 0xFF] = (ret >> 8) & 0xFF;
-  mem[(cpu.R + 2) & 0xFF] = ret & 0xFF;
 }
 function popReturn() {
-  const hi = mem[(cpu.R + 1) & 0xFF], lo = mem[(cpu.R + 2) & 0xFF];
+  const lo = mem[cpu.R & 0xFF], hi = mem[(cpu.R + 1) & 0xFF];
   cpu.R = (cpu.R + 2) & 0xFF;
   return (hi << 8) | lo;
 }
@@ -1244,7 +1265,7 @@ defExec(0x30, () => { cpu.P=cpu.A; cpu.H=cpu.A; });
 defExec(0x31, () => { cpu.Q=cpu.A; cpu.H=cpu.A; });
 defExec(0x32, () => { cpu.R=cpu.A; cpu.H=cpu.A; });
 defExec(0x33, () => { cpu.H=cpu.A; });
-defExec(0x34, () => { mem[cpu.R & 0xFF]=cpu.A; cpu.R=(cpu.R-1)&0xFF; });
+defExec(0x34, () => { cpu.R=(cpu.R-1)&0xFF; mem[cpu.R & 0xFF]=cpu.A; }); // PUSH: R-1→R, A→(R) (pre-decrement, per MAME)
 defExec(0x35, () => { // DATA: internal ROM ($0000-$1FFF) is not emulated — fill with 0, documented limitation
   for (let k=0;k<=cpu.I;k++) mem[(cpu.P+k)&0xFFFF]=0;
   cpu.P=(cpu.P+cpu.I+1)&0xFF;
@@ -1594,6 +1615,8 @@ function renderRegisters() {
     return `<div class="reg-cell ${cls}"><div class="rn">${name}</div><div class="rv">$${hex}<span class="dec">${v}</span></div></div>`;
   }).join('');
 
+  renderPointers();
+
   document.getElementById('flags-row').innerHTML = `
     <div class="flag-dot"><div class="flag-led${cpu.flags.z?' lit':''}"></div>Z</div>
     <div class="flag-dot"><div class="flag-led${cpu.flags.c?' lit':''}"></div>C</div>`;
@@ -1611,6 +1634,80 @@ function renderRegisters() {
 
   document.getElementById('stat-steps').textContent = cpu.stepCount;
   document.getElementById('stat-pc').textContent = '$' + h4(cpu.PC);
+}
+
+// ══════════════════════════════════════════════════════════
+// RENDER: POINTERS — value at the address each pointer register holds.
+// P/Q/R address internal RAM (tagged with the register living there);
+// DP/X/Y address the 64 KB external space. X/Y also show "next" = (X+1)/(Y+1),
+// the byte IX/IXL/IY/IYS will touch next (they pre-increment).
+// Internal ROM ($0000-$1FFF) is not emulated, so external pointers into it show "--".
+// A value/address is highlighted when it changed since the previous step.
+// ══════════════════════════════════════════════════════════
+const REG_AT_ADDR = {};
+for (const [name, addr] of Object.entries(REG_ADDR)) REG_AT_ADDR[addr] = name;
+const INT_ROM_END = 0x2000;
+let ptrState = { step: -1, cur: null, prev: null };
+
+function ptrSnapshot() {
+  const s = {};
+  const add = (n, a, ext) => { s[n] = { a, v: (ext && a < INT_ROM_END) ? null : mem[a] }; };
+  // same indexing the opcode handlers use, so the panel shows exactly what the CPU will read
+  add('P',  cpu.P & 0xFF, false);
+  add('Q',  cpu.Q & 0xFF, false);
+  add('R',  cpu.R & 0xFF, false);
+  add('DP', getDP(), true);
+  add('X',  getX(),  true);
+  add('Y',  getY(),  true);
+  add('X+', (getX()+1) & 0xFFFF, true);
+  add('Y+', (getY()+1) & 0xFFFF, true);
+  return s;
+}
+
+function renderPointers() {
+  const snap = ptrSnapshot();
+  if (cpu.stepCount !== ptrState.step) {
+    ptrState.prev = (cpu.stepCount === 0) ? null : ptrState.cur;
+    ptrState.step = cpu.stepCount;
+  }
+  ptrState.cur = snap;
+  const prev = ptrState.prev;
+
+  const val = (k) => {
+    const e = snap[k];
+    if (e.v === null) return `<span class="na" title="internal ROM ($0000-$1FFF) is not emulated">--</span>`;
+    const changed = prev && prev[k] && prev[k].a === e.a && prev[k].v !== e.v;
+    return `<span class="${changed ? 'chg' : ''}">$${h2(e.v)}</span>`;
+  };
+  const row = (name, key, wide, extra) => {
+    const e = snap[key];
+    const aChanged = prev && prev[key] && prev[key].a !== e.a;
+    return `<div class="ptr-row" onclick="jumpToPtr(${e.a})" title="Show $${h4(e.a)} in memory view">` +
+      `<span class="pn">${name}</span>` +
+      `<span class="pa${aChanged ? ' chg' : ''}">$${wide ? h4(e.a) : h2(e.a)}</span>` +
+      `<span class="par">→</span>` +
+      `<span class="pv">${val(key)}</span>` +
+      `<span>${extra || ''}</span></div>`;
+  };
+  const tag  = (key) => REG_AT_ADDR[snap[key].a] !== undefined ? `<span class="pt">‹${REG_AT_ADDR[snap[key].a]}›</span>` : '';
+  const next = (key) => `<span class="pnx">next <b>${val(key)}</b></span>`;
+
+  document.getElementById('ptr-block').innerHTML =
+    `<div class="ptr-title">POINTERS</div>` +
+    row('P',  'P',  false, tag('P')) +
+    row('Q',  'Q',  false, tag('Q')) +
+    row('R',  'R',  false, tag('R')) +
+    row('DP', 'DP', true) +
+    row('X',  'X',  true,  next('X+')) +
+    row('Y',  'Y',  true,  next('Y+'));
+}
+
+function jumpToPtr(a) {
+  followPC = false;
+  document.getElementById('follow-pc-chk').checked = false;
+  memViewBase = Math.max(0, a - COLS*4) & 0xFFFF;
+  memSelAddr = a & 0xFFFF;
+  renderMemory();
 }
 
 // ══════════════════════════════════════════════════════════
