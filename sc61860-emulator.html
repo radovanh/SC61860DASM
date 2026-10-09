@@ -215,7 +215,7 @@
   .ptr-title { font-size: 9px; color: var(--muted); letter-spacing: 1.5px; padding: 0 6px 4px; border-bottom: 1px solid var(--border); margin-bottom: 3px; }
   .ptr-row { display: grid; grid-template-columns: 22px 44px 14px 28px 58px; align-items: baseline; padding: 2px 6px; font-size: 12px; line-height: 1.5; cursor: pointer; border-radius: 2px; white-space: nowrap; }
   .ptr-row:hover { background: rgba(0,229,255,0.08); }
-  .ptr-row .pn  { color: var(--muted); font-size: 10px; letter-spacing: 1px; }
+  .ptr-row .pn  { color: var(--text); font-size: 11px; letter-spacing: 1px; }
   .ptr-row .pa  { color: var(--accent); }
   .ptr-row .par { color: var(--dim); text-align: center; }
   .ptr-row .pv  { color: var(--green); }
@@ -224,7 +224,7 @@
   .ptr-row .pnx b { color: var(--text); font-weight: normal; }
   .ptr-row .chg { color: var(--yellow); text-shadow: 0 0 6px rgba(232,216,122,0.5); }
   .ptr-row .na  { color: var(--dim); }
-  .reg-cell .rn { font-size: 9px; color: var(--muted); letter-spacing: 1.5px; }
+  .reg-cell .rn { font-size: 11px; color: var(--text); letter-spacing: 1.5px; }
   .reg-cell .rv { font-size: 14px; color: var(--accent); font-family: 'Orbitron', monospace; }
   .reg-cell .rv .dec { color: var(--muted); font-size: 10px; margin-left: 4px; }
   .reg-cell.pc .rv { color: var(--accent2); }
@@ -359,8 +359,8 @@
       <div id="regs-body">
         <div class="halt-banner" id="halt-banner"></div>
         <div class="regs-row">
-          <div class="ptr-block" id="ptr-block"></div>
           <div class="reg-grid" id="reg-grid"></div>
+          <div class="ptr-block" id="ptr-block"></div>
         </div>
         <div class="flags-row" id="flags-row"></div>
         <div class="rom-disclaimer">
